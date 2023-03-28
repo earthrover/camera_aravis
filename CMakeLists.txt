@@ -26,7 +26,9 @@ find_package(catkin REQUIRED COMPONENTS
   tf
   tf2_ros
 )
-find_package(Aravis REQUIRED)
+
+# Version >= 0.8.16 -> ARV_UV_USB_MODE_ASYNC
+find_package(Aravis 0.8.16 REQUIRED)
 find_package(GLIB2 REQUIRED)
 
 generate_dynamic_reconfigure_options(cfg/CameraAravis.cfg)
