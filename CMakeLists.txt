@@ -56,7 +56,7 @@ generate_messages(
 )
 
 catkin_package(
-    DEPENDS Aravis GLIB2
+    DEPENDS Aravis
     CATKIN_DEPENDS roscpp nodelet std_msgs sensor_msgs message_runtime image_transport camera_info_manager dynamic_reconfigure tf tf2_ros
     INCLUDE_DIRS
     LIBRARIES
@@ -66,28 +66,25 @@ include_directories(cfg
   include
   ${catkin_INCLUDE_DIRS}
   ${Aravis_INCLUDE_DIRS}
-  ${GLIB2_INCLUDE_DIRS})
-
-set(LIBRARIES
-  ${catkin_LIBRARIES}
-  ${Aravis_LIBRARIES}
-  glib-2.0
-  gmodule-2.0
-  gobject-2.0
 )
+
+link_directories(${Aravis_LIBRARY_DIRS})
 
 add_library(${PROJECT_NAME}
   src/camera_aravis_nodelet.cpp
   src/camera_buffer_pool.cpp
   src/conversion_utils.cpp
 )
-target_link_libraries(${PROJECT_NAME} ${LIBRARIES})
+
+target_link_libraries(${PROJECT_NAME} ${Aravis_LIBRARIES} ${catkin_LIBRARIES})
 add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
 
 add_executable(cam_aravis
   src/camera_aravis_node.cpp
 )
-target_link_libraries(cam_aravis ${PROJECT_NAME} ${LIBRARIES})
+
+target_link_libraries(cam_aravis ${PROJECT_NAME})
 add_dependencies(cam_aravis ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 install(DIRECTORY include/${PROJECT_NAME}/
