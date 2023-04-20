@@ -503,6 +503,25 @@ void CameraAravisNodelet::onInit()
     config_max_.FocusPos = 0;
   }
 
+  ArvUvUsbMode usb_mode = ARV_UV_USB_MODE_DEFAULT;
+  // ArvUvUsbMode mode = ARV_UV_USB_MODE_SYNC;
+  // ArvUvUsbMode mode = ARV_UV_USB_MODE_ASYNC;
+  std::string usb_mode_arg = "default";
+  if (pnh.getParam("usb_mode", usb_mode_arg)) {
+    if (usb_mode_arg.size() > 0) {
+      if (usb_mode_arg[0] == 's' or usb_mode_arg[0] == 'S') { usb_mode = ARV_UV_USB_MODE_SYNC; }
+      else if (usb_mode_arg[0] == 'a' or usb_mode_arg[0] == 'A') { usb_mode = ARV_UV_USB_MODE_ASYNC; }
+      else if (usb_mode_arg[0] == 'd' or usb_mode_arg[0] == 'D') { usb_mode = ARV_UV_USB_MODE_DEFAULT; }
+      else {
+          ROS_WARN_STREAM("Unrecognized USB mode "
+                          << usb_mode_arg << " (recognized modes: SYNC, ASYNC and DEFAULT), using DEFAULT ...");
+      }
+    } else {
+          ROS_WARN("Empty USB mode (recognized modes: SYNC, ASYNC and DEFAULT), using DEFAULT ...");
+    }
+  }
+  if (arv_camera_is_uv_device(p_camera_)) arv_uv_device_set_usb_mode(ARV_UV_DEVICE(p_device_), usb_mode);
+
   for(int i = 0; i < num_streams_; i++) {
     if (arv_camera_is_gv_device(p_camera_)) aravis::camera::gv::select_stream_channel(p_camera_, i);
 
