@@ -32,6 +32,16 @@
 #include <pluginlib/class_list_macros.h>
 PLUGINLIB_EXPORT_CLASS(camera_aravis::CameraAravisNodelet, nodelet::Nodelet)
 
+#ifndef ARAVIS_HAS_USB_MODE
+#if ARAVIS_MAJOR_VERSION > 0 || \
+    ARAVIS_MAJOR_VERSION == 0 && ARAVIS_MINOR_VERSION > 8 || \
+    ARAVIS_MAJOR_VERSION == 0 && ARAVIS_MINOR_VERSION == 8 && ARAVIS_MICRO_VERSION >= 17
+  #define ARAVIS_HAS_USB_MODE 1
+#else
+  #define ARAVIS_HAS_USB_MODE 0
+#endif
+#endif
+
 
 // #define ARAVIS_ERRORS_ABORT 1
 
@@ -503,6 +513,7 @@ void CameraAravisNodelet::onInit()
     config_max_.FocusPos = 0;
   }
 
+#if ARAVIS_HAS_USB_MODE
   ArvUvUsbMode usb_mode = ARV_UV_USB_MODE_DEFAULT;
   // ArvUvUsbMode mode = ARV_UV_USB_MODE_SYNC;
   // ArvUvUsbMode mode = ARV_UV_USB_MODE_ASYNC;
@@ -521,6 +532,7 @@ void CameraAravisNodelet::onInit()
     }
   }
   if (arv_camera_is_uv_device(p_camera_)) arv_uv_device_set_usb_mode(ARV_UV_DEVICE(p_device_), usb_mode);
+#endif
 
   for(int i = 0; i < num_streams_; i++) {
     if (arv_camera_is_gv_device(p_camera_)) aravis::camera::gv::select_stream_channel(p_camera_, i);
