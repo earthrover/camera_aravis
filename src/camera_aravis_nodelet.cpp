@@ -1873,9 +1873,9 @@ void CameraAravisNodelet::writeCameraFeaturesFromRosparam()
         {
           case XmlRpc::XmlRpcValue::TypeBoolean: //if ((iter->second.getType()==XmlRpc::XmlRpcValue::TypeBoolean))// && (typeValue==G_TYPE_INT64))
           {
-            int value = (bool)iter->second;
-            aravis::device::feature::set_integer(p_device_, key.c_str(), value);
-            ROS_INFO("Read parameter (bool) %s: %d", key.c_str(), value);
+            bool value = (bool)iter->second;
+            aravis::device::feature::set_boolean(p_device_, key.c_str(), value);
+            ROS_INFO("Read parameter (bool) %s: %s", key.c_str(), value ? "true" : "false");
           }
             break;
 
