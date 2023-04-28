@@ -79,7 +79,7 @@ namespace camera_aravis
 
     GError* operator->() noexcept { return err; }
 
-    operator bool() const { return nullptr == err; }
+    operator bool() const { return nullptr != err; }
 
     void log(const std::string& suffix = "") {
         bool cond = *this == nullptr;
@@ -97,7 +97,7 @@ namespace camera_aravis
 
   bool operator==(const GuardedGError& lhs, const GError* rhs) { return lhs.err == rhs; }
   bool operator==(const GuardedGError& lhs, const GuardedGError& rhs) { return lhs.err == rhs.err; }
-  bool operator!=(const GuardedGError& lhs, std::nullptr_t) { return !lhs; }
+  bool operator!=(const GuardedGError& lhs, std::nullptr_t) { return !!lhs; }
 
 namespace aravis {
   const std::string logger_suffix = "aravis";
