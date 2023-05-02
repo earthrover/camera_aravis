@@ -72,6 +72,8 @@ extern "C" {
 #include <camera_aravis/get_boolean_feature_value.h>
 #include <camera_aravis/set_boolean_feature_value.h>
 
+#include <camera_aravis/execute_command.h>
+
 #include <camera_aravis/camera_buffer_pool.h>
 #include <camera_aravis/conversion_utils.h>
 
@@ -162,6 +164,9 @@ protected:
 
   ros::ServiceServer set_boolean_service_;
   bool setBooleanFeatureCallback(camera_aravis::set_boolean_feature_value::Request& request, camera_aravis::set_boolean_feature_value::Response& response);
+
+  ros::ServiceServer exec_command_service_;
+  bool executeCommandCallback(camera_aravis::execute_command::Request& request, camera_aravis::execute_command::Response& response);
 
   // triggers a shot at regular intervals, sleeps in between
   void softwareTriggerLoop();
