@@ -534,6 +534,15 @@ void CameraAravisNodelet::onInit()
   if (arv_camera_is_uv_device(p_camera_)) arv_uv_device_set_usb_mode(ARV_UV_DEVICE(p_device_), usb_mode);
 #endif
 
+  if (pnh.param("load_user_set", false)) {
+      if (pnh.hasParam("UserSetSelector")) {
+        std::string user_set;
+        pnh.getParam("UserSetSelector", user_set);
+        aravis::device::feature::set_string(p_device_, "UserSetSelector", user_set.c_str());
+      }
+      aravis::device::execute_command(p_device_, "UserSetLoad");
+  }
+
   for(int i = 0; i < num_streams_; i++) {
     if (arv_camera_is_gv_device(p_camera_)) aravis::camera::gv::select_stream_channel(p_camera_, i);
 
