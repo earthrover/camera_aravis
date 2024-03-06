@@ -861,6 +861,8 @@ void CameraAravisNodelet::spawnStream()
   this->set_string_service_ = pnh.advertiseService("set_string_feature_value", &CameraAravisNodelet::setStringFeatureCallback, this);
   this->set_boolean_service_ = pnh.advertiseService("set_boolean_feature_value", &CameraAravisNodelet::setBooleanFeatureCallback, this);
 
+  this->exec_command_service_ = pnh.advertiseService("execute_command", &CameraAravisNodelet::executeCommandCallback, this);
+
   ROS_INFO("Done initializing camera_aravis.");
 }
 
@@ -941,6 +943,15 @@ bool CameraAravisNodelet::setBooleanFeatureCallback(camera_aravis::set_boolean_f
   arv_device_set_boolean_feature_value(this->p_device_, feature_name, value, error.storeError());
   LOG_GERROR_ARAVIS(error);
   response.ok = !error;
+  return true;
+}
+
+bool CameraAravisNodelet::executeCommandCallback(camera_aravis::execute_command::Request& request, camera_aravis::execute_command::Response& response) {
+  GuardedGError error;
+  const char* command = request.command.c_str();
+  arv_device_execute_command(this->p_device_, command, error.storeError());
+  LOG_GERROR_ARAVIS(error);
+  response.response = !error;
   return true;
 }
 
