@@ -8,11 +8,7 @@ The camera_aravis driver has long history of multiple forks and now abandoned Gi
 
 ------------------------
 
-Tested with Aravis version 0.6.X. Since Ubuntu 20.04 the library can be installed from the official Ubuntu package repository. Install with:
-
-```
-sudo apt install libaravis-dev
-```
+Tested with Aravis version 0.8.X. Since it has changed the API, specially the error handling.
 
 The basic command to run camera_aravis:
 
@@ -46,6 +42,7 @@ a variety of camera features via the ROS reconfigure_gui, including the followin
 * frame_id             (string)
 * FocusPos             (integer)
 * mtu                  (integer)
+* usb_mode             (string: SYNC, ASYNC, DEFAULT) { aravis >= v0.8.17 }
 
 Note that the above are also the ROS parameter names of their respective feature.  You may
 set initial values for the camera by setting ROS parameters in the camera's namespace.
