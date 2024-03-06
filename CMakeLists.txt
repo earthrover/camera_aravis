@@ -49,6 +49,8 @@ add_service_files(
   set_float_feature_value.srv
   set_integer_feature_value.srv
   set_string_feature_value.srv
+
+  execute_command.srv
 )
 
 generate_messages(
