@@ -186,6 +186,7 @@ protected:
   // looking at the camera's XML file.  Camera enum's are string parameters, camera bools are false/true parameters (not 0/1),
   // integers are integers, doubles are doubles, etc.
   void writeCameraFeaturesFromRosparam();
+  void writeCameraFeatureFromRosparam(const XmlRpc::XmlRpcValue::iterator::value_type& iter);
 
   std::unique_ptr<dynamic_reconfigure::Server<Config> > reconfigure_server_;
   boost::recursive_mutex reconfigure_mutex_;
