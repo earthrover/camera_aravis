@@ -1872,6 +1872,21 @@ void CameraAravisNodelet::writeCameraFeaturesFromRosparam()
   XmlRpc::XmlRpcValue xml_rpc_params;
   XmlRpc::XmlRpcValue::iterator iter;
 
+  getPrivateNodeHandle().getParam(this->getName() + "/feature_load_order", xml_rpc_params);
+  if (xml_rpc_params.getType() == XmlRpc::XmlRpcValue::TypeArray) {
+    for (int32_t i = 0; i < xml_rpc_params.size(); ++i) {
+      const auto& elem = xml_rpc_params[i];
+      if (elem.getType() != XmlRpc::XmlRpcValue::TypeString) {
+        ROS_WARN_STREAM("Invalid value '" << std::string(elem) << "' in param: " << this->getName() << "/feature_load_order");
+        return
+      }
+
+      XmlRpc::XmlRpcValue item;
+      getPrivateNodeHandle().getParam(this->getName() + "/" + static_cast<std::string>(elem), item);
+      this->writeCameraFeatureFromRosparam(std::make_pair(static_cast<std::string>(elem), item));
+    }
+  }
+
   getPrivateNodeHandle().getParam(this->getName(), xml_rpc_params);
 
   if (xml_rpc_params.getType() != XmlRpc::XmlRpcValue::TypeStruct) {  return; }
