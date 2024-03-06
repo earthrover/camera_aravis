@@ -534,6 +534,15 @@ void CameraAravisNodelet::onInit()
   if (arv_camera_is_uv_device(p_camera_)) arv_uv_device_set_usb_mode(ARV_UV_DEVICE(p_device_), usb_mode);
 #endif
 
+  if (pnh.param("load_user_set", false)) {
+      if (pnh.hasParam("UserSetSelector")) {
+        std::string user_set;
+        pnh.getParam("UserSetSelector", user_set);
+        aravis::device::feature::set_string(p_device_, "UserSetSelector", user_set.c_str());
+      }
+      aravis::device::execute_command(p_device_, "UserSetLoad");
+  }
+
   for(int i = 0; i < num_streams_; i++) {
     if (arv_camera_is_gv_device(p_camera_)) aravis::camera::gv::select_stream_channel(p_camera_, i);
 
@@ -1862,67 +1871,89 @@ void CameraAravisNodelet::writeCameraFeaturesFromRosparam()
 {
   XmlRpc::XmlRpcValue xml_rpc_params;
   XmlRpc::XmlRpcValue::iterator iter;
-  ArvGcNode *p_gc_node;
-  GError *error = NULL;
+
+  getPrivateNodeHandle().getParam(this->getName() + "/feature_load_order", xml_rpc_params);
+  if (xml_rpc_params.getType() == XmlRpc::XmlRpcValue::TypeArray) {
+    for (int32_t i = 0; i < xml_rpc_params.size(); ++i) {
+      const auto& elem = xml_rpc_params[i];
+      if (elem.getType() != XmlRpc::XmlRpcValue::TypeString) {
+        ROS_WARN_STREAM("Invalid value '" << std::string(elem) << "' in param: " << this->getName() << "/feature_load_order");
+        return
+      }
+
+      XmlRpc::XmlRpcValue item;
+      getPrivateNodeHandle().getParam(this->getName() + "/" + static_cast<std::string>(elem), item);
+      this->writeCameraFeatureFromRosparam(std::make_pair(static_cast<std::string>(elem), item));
+    }
+  }
 
   getPrivateNodeHandle().getParam(this->getName(), xml_rpc_params);
 
-  if (xml_rpc_params.getType() == XmlRpc::XmlRpcValue::TypeStruct)
+  if (xml_rpc_params.getType() != XmlRpc::XmlRpcValue::TypeStruct) {  return; }
+
+  // Write first the Selectors given that no meaningful order could be applied (cascade order is lost)
+  std::for_each(xml_rpc_params.begin(), xml_rpc_params.end(), [&](auto elem) {
+      if (elem.first.find("Selector") != elem.first.npos) this->writeCameraFeatureFromRosparam(elem);
+  });
+
+  std::for_each(xml_rpc_params.begin(), xml_rpc_params.end(), [&](auto elem) {
+      if (elem.first.find("Selector") == elem.first.npos) this->writeCameraFeatureFromRosparam(elem);
+  });
+}
+
+void CameraAravisNodelet::writeCameraFeatureFromRosparam(const XmlRpc::XmlRpcValue::iterator::value_type& iter) {
+  GError *error = NULL;
+
+  std::string key = iter.first;
+
+  ArvGcNode *p_gc_node = arv_device_get_feature(p_device_, key.c_str());
+  if (p_gc_node && arv_gc_feature_node_is_implemented(ARV_GC_FEATURE_NODE(p_gc_node), &error))
   {
-    for (iter = xml_rpc_params.begin(); iter != xml_rpc_params.end(); iter++)
+    //				unsigned long	typeValue = arv_gc_feature_node_get_value_type((ArvGcFeatureNode *)pGcNode);
+    //				ROS_INFO("%s cameratype=%lu, rosparamtype=%d", key.c_str(), typeValue, static_cast<int>(iter.second.getType()));
+
+    // We'd like to check the value types too, but typeValue is often given as G_TYPE_INVALID, so ignore it.
+    switch (iter.second.getType())
     {
-      std::string key = iter->first;
-
-      p_gc_node = arv_device_get_feature(p_device_, key.c_str());
-      if (p_gc_node && arv_gc_feature_node_is_implemented(ARV_GC_FEATURE_NODE(p_gc_node), &error))
+      case XmlRpc::XmlRpcValue::TypeBoolean: //if ((iter.second.getType()==XmlRpc::XmlRpcValue::TypeBoolean))// && (typeValue==G_TYPE_INT64))
       {
-        //				unsigned long	typeValue = arv_gc_feature_node_get_value_type((ArvGcFeatureNode *)pGcNode);
-        //				ROS_INFO("%s cameratype=%lu, rosparamtype=%d", key.c_str(), typeValue, static_cast<int>(iter->second.getType()));
-
-        // We'd like to check the value types too, but typeValue is often given as G_TYPE_INVALID, so ignore it.
-        switch (iter->second.getType())
-        {
-          case XmlRpc::XmlRpcValue::TypeBoolean: //if ((iter->second.getType()==XmlRpc::XmlRpcValue::TypeBoolean))// && (typeValue==G_TYPE_INT64))
-          {
-            bool value = (bool)iter->second;
-            aravis::device::feature::set_boolean(p_device_, key.c_str(), value);
-            ROS_INFO("Read parameter (bool) %s: %s", key.c_str(), value ? "true" : "false");
-          }
-            break;
-
-          case XmlRpc::XmlRpcValue::TypeInt: //if ((iter->second.getType()==XmlRpc::XmlRpcValue::TypeInt))// && (typeValue==G_TYPE_INT64))
-          {
-            int value = (int)iter->second;
-            aravis::device::feature::set_integer(p_device_, key.c_str(), value);
-            ROS_INFO("Read parameter (int) %s: %d", key.c_str(), value);
-          }
-            break;
-
-          case XmlRpc::XmlRpcValue::TypeDouble: //if ((iter->second.getType()==XmlRpc::XmlRpcValue::TypeDouble))// && (typeValue==G_TYPE_DOUBLE))
-          {
-            double value = (double)iter->second;
-            aravis::device::feature::set_float(p_device_, key.c_str(), value);
-            ROS_INFO("Read parameter (float) %s: %f", key.c_str(), value);
-          }
-            break;
-
-          case XmlRpc::XmlRpcValue::TypeString: //if ((iter->second.getType()==XmlRpc::XmlRpcValue::TypeString))// && (typeValue==G_TYPE_STRING))
-          {
-            std::string value = (std::string)iter->second;
-            aravis::device::feature::set_string(p_device_, key.c_str(), value.c_str());
-            ROS_INFO("Read parameter (string) %s: %s", key.c_str(), value.c_str());
-          }
-            break;
-
-          case XmlRpc::XmlRpcValue::TypeInvalid:
-          case XmlRpc::XmlRpcValue::TypeDateTime:
-          case XmlRpc::XmlRpcValue::TypeBase64:
-          case XmlRpc::XmlRpcValue::TypeArray:
-          case XmlRpc::XmlRpcValue::TypeStruct:
-          default:
-            ROS_WARN("Unhandled rosparam type in writeCameraFeaturesFromRosparam()");
-        }
+        bool value = (bool)iter.second;
+        aravis::device::feature::set_boolean(p_device_, key.c_str(), value);
+        ROS_INFO("Read parameter (bool) %s: %s", key.c_str(), value ? "true" : "false");
       }
+        break;
+
+      case XmlRpc::XmlRpcValue::TypeInt: //if ((iter.second.getType()==XmlRpc::XmlRpcValue::TypeInt))// && (typeValue==G_TYPE_INT64))
+      {
+        int value = (int)iter.second;
+        aravis::device::feature::set_integer(p_device_, key.c_str(), value);
+        ROS_INFO("Read parameter (int) %s: %d", key.c_str(), value);
+      }
+        break;
+
+      case XmlRpc::XmlRpcValue::TypeDouble: //if ((iter.second.getType()==XmlRpc::XmlRpcValue::TypeDouble))// && (typeValue==G_TYPE_DOUBLE))
+      {
+        double value = (double)iter.second;
+        aravis::device::feature::set_float(p_device_, key.c_str(), value);
+        ROS_INFO("Read parameter (float) %s: %f", key.c_str(), value);
+      }
+        break;
+
+      case XmlRpc::XmlRpcValue::TypeString: //if ((iter.second.getType()==XmlRpc::XmlRpcValue::TypeString))// && (typeValue==G_TYPE_STRING))
+      {
+        std::string value = (std::string)iter.second;
+        aravis::device::feature::set_string(p_device_, key.c_str(), value.c_str());
+        ROS_INFO("Read parameter (string) %s: %s", key.c_str(), value.c_str());
+      }
+        break;
+
+      case XmlRpc::XmlRpcValue::TypeInvalid:
+      case XmlRpc::XmlRpcValue::TypeDateTime:
+      case XmlRpc::XmlRpcValue::TypeBase64:
+      case XmlRpc::XmlRpcValue::TypeArray:
+      case XmlRpc::XmlRpcValue::TypeStruct:
+      default:
+        ROS_WARN("Unhandled rosparam type in writeCameraFeaturesFromRosparam()");
     }
   }
 }
