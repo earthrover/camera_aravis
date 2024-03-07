@@ -79,6 +79,12 @@ add_library(${PROJECT_NAME}
   src/camera_aravis_nodelet.cpp
   src/camera_buffer_pool.cpp
   src/conversion_utils.cpp
+  src/internal/aravis_abstraction.cpp
+  src/internal/GErrorGuard.cpp
+  src/internal/discover_features.cpp
+  src/internal/service_callbacks.cpp
+  src/internal/tuneGVStream.cpp
+  src/internal/resetPtpClock.cpp
 )
 
 target_link_libraries(${PROJECT_NAME} ${Aravis_LIBRARIES} glib-2.0 gmodule-2.0 gobject-2.0 ${catkin_LIBRARIES})

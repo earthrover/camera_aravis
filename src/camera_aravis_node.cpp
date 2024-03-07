@@ -40,14 +40,13 @@
 
 #include <nodelet/loader.h>
 
-int main(int argc, char** argv)
-{
-	ros::init(argc, argv, "camera_aravis");
-	nodelet::Loader manager(ros::NodeHandle("~"));
-	nodelet::M_string remap(ros::names::getRemappings());
-	nodelet::V_string nargv;
-	manager.load(ros::this_node::getName(), "camera_aravis/CameraAravisNodelet", remap, nargv);
-	ros::spin();
+int main(int argc, char** argv) {
+    ros::init(argc, argv, "camera_aravis");
+    nodelet::Loader manager(ros::NodeHandle("~"));
+    nodelet::M_string remap(ros::names::getRemappings());
+    nodelet::V_string nargv;
+    manager.load(ros::this_node::getName(), "camera_aravis/CameraAravisNodelet", remap, nargv);
+    ros::spin();
 
     return 0;
 }
