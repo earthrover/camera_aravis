@@ -85,7 +85,7 @@ typedef CameraAravisConfig Config;
 class CameraAravisNodelet : public nodelet::Nodelet
 {
 public:
-  CameraAravisNodelet();
+  CameraAravisNodelet(){};
   virtual ~CameraAravisNodelet();
 
 private:
@@ -110,9 +110,6 @@ private:
 
 
 protected:
-  // reset PTP clock
-  void resetPtpClock();
-
   // apply auto functions from a ros message
   void cameraAutoInfoCallback(const CameraAutoInfoConstPtr &msg_ptr);
 
@@ -122,9 +119,6 @@ protected:
 
   void setExtendedCameraInfo(std::string channel_name, size_t stream_id);
   void fillExtendedCameraInfoMessage(ExtendedCameraInfo &msg);
-
-  // Extra stream options for GigEVision streams.
-  void tuneGvStream(ArvGvStream *p_stream);
 
   void rosReconfigureCallback(Config &config, uint32_t level);
 
@@ -172,8 +166,6 @@ protected:
   void softwareTriggerLoop();
 
   void publishTfLoop(double rate);
-
-  void discoverFeatures();
 
   static void parseStringArgs(std::string in_arg_string, std::vector<std::string> &out_args);
 

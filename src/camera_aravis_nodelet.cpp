@@ -32,295 +32,17 @@
 #include <pluginlib/class_list_macros.h>
 PLUGINLIB_EXPORT_CLASS(camera_aravis::CameraAravisNodelet, nodelet::Nodelet)
 
-#ifndef ARAVIS_HAS_USB_MODE
-#if ARAVIS_MAJOR_VERSION > 0 || \
-    ARAVIS_MAJOR_VERSION == 0 && ARAVIS_MINOR_VERSION > 8 || \
-    ARAVIS_MAJOR_VERSION == 0 && ARAVIS_MINOR_VERSION == 8 && ARAVIS_MICRO_VERSION >= 17
-  #define ARAVIS_HAS_USB_MODE 1
-#else
-  #define ARAVIS_HAS_USB_MODE 0
-#endif
-#endif
-
-
 // #define ARAVIS_ERRORS_ABORT 1
+#include <camera_aravis_internal/GErrorGuard.h>
+#include <camera_aravis_internal/GErrorROSLog.h>
+#include <camera_aravis_internal/aravis_abstraction.h>
+#include <camera_aravis_internal/discover_features.h>
+#include <camera_aravis_internal/resetPtpClock.h>
+#include <camera_aravis_internal/tuneGVStream.h>
 
-#ifdef ARAVIS_ERRORS_ABORT
-#define LOG_GERROR_ARAVIS(err)                                                                         \
-    ROS_ASSERT_MSG((err) == nullptr, "%s: [%s] Code %i: %s", ::camera_aravis::aravis::logger_suffix.c_str(), \
-               g_quark_to_string((err)->domain), (err)->code, (err)->message)
-#else
-#define LOG_GERROR_ARAVIS(err)                                                                           \
-    ROS_ERROR_COND_NAMED((err) != nullptr, ::camera_aravis::aravis::logger_suffix, "[%s] Code %i: %s", \
-                             g_quark_to_string((err)->domain), (err)->code, (err)->message)
-#endif
 
 namespace camera_aravis
 {
-  using GErrorGuard = std::unique_ptr<GError*, void (*)(GError**)>;
-
-  GErrorGuard makeGErrorGuard() {
-      return GErrorGuard(nullptr, [](GErrorGuard::pointer error) {
-          if (error && *error) g_error_free(*error);
-      });
-  }
-
-  class GuardedGError {
-    public:
-    ~GuardedGError() { reset(); }
-
-    void reset() {
-      if (!err) return;
-      g_error_free(err);
-      err = nullptr;
-    }
-
-    GError** storeError() { return &err; }
-
-    GError* operator->() noexcept { return err; }
-
-    operator bool() const { return nullptr != err; }
-
-    void log(const std::string& suffix = "") {
-        bool cond = *this == nullptr;
-        ROS_ERROR_COND_NAMED(err != nullptr, suffix, "[%s] Code %i: %s", g_quark_to_string(err->domain), err->code, err->message);
-    }
-
-    friend bool operator==(const GuardedGError& lhs, const GError* rhs);
-    friend bool operator==(const GuardedGError& lhs, const GuardedGError& rhs);
-    friend bool operator!=(const GuardedGError& lhs, std::nullptr_t);
-
-    private:
-
-    GError *err = nullptr;
-  };
-
-  bool operator==(const GuardedGError& lhs, const GError* rhs) { return lhs.err == rhs; }
-  bool operator==(const GuardedGError& lhs, const GuardedGError& rhs) { return lhs.err == rhs.err; }
-  bool operator!=(const GuardedGError& lhs, std::nullptr_t) { return !!lhs; }
-
-namespace aravis {
-  const std::string logger_suffix = "aravis";
-
-  namespace device {
-    void execute_command(ArvDevice* dev, const char* cmd) {
-        GuardedGError err;
-        arv_device_execute_command(dev, cmd, err.storeError());
-        LOG_GERROR_ARAVIS(err);
-    }
-
-    namespace feature {          
-      gboolean get_boolean(ArvDevice* dev, const char* feat) {
-        GuardedGError err;
-        gboolean res = arv_device_get_boolean_feature_value(dev, feat, err.storeError());
-        LOG_GERROR_ARAVIS(err);
-        return res;
-      }
-
-      void set_boolean(ArvDevice* dev, const char* feat, gboolean val) {
-        GuardedGError err;
-        arv_device_set_boolean_feature_value(dev, feat, val, err.storeError());
-        LOG_GERROR_ARAVIS(err);
-      }
-
-      gint64 get_integer(ArvDevice* dev, const char* feat) {
-        GuardedGError err;
-        gint64 res = arv_device_get_integer_feature_value(dev, feat, err.storeError());
-        LOG_GERROR_ARAVIS(err);
-        return res;
-      }
-
-      void set_integer(ArvDevice* dev, const char* feat, gint64 val) {
-        GuardedGError err;
-        arv_device_set_integer_feature_value(dev, feat, val, err.storeError());
-        LOG_GERROR_ARAVIS(err);
-      }
-
-      double get_float(ArvDevice* dev, const char* feat) {
-        GuardedGError err;
-        double res = arv_device_get_float_feature_value(dev, feat, err.storeError());
-        LOG_GERROR_ARAVIS(err);
-        return res;
-      }
-
-      void set_float(ArvDevice* dev, const char* feat, double val) {
-        GuardedGError err;
-        arv_device_set_float_feature_value(dev, feat, val, err.storeError());
-        LOG_GERROR_ARAVIS(err);
-      }
-
-      const char* get_string(ArvDevice* dev, const char* feat) {
-        GuardedGError err;
-        const char* res = arv_device_get_string_feature_value(dev, feat, err.storeError());
-        LOG_GERROR_ARAVIS(err);
-        return res;
-      }
-
-      void set_string(ArvDevice* dev, const char* feat, const char* val) {
-        GuardedGError err;
-        arv_device_set_string_feature_value(dev, feat, val, err.storeError());
-        LOG_GERROR_ARAVIS(err);
-      }
-
-      namespace bounds {
-        void get_integer(ArvDevice* dev, const char* feat, gint64* min, gint64* max) {
-          GuardedGError err;
-          arv_device_get_integer_feature_bounds(dev, feat, min, max, err.storeError());
-          LOG_GERROR_ARAVIS(err);
-        }
-
-        void get_float(ArvDevice* dev, const char* feat, double* min, double* max) {
-            GuardedGError err;
-            arv_device_get_float_feature_bounds(dev, feat, min, max, err.storeError());
-            LOG_GERROR_ARAVIS(err);
-        }
-      }
-    }
-  }
-
-  ArvCamera* camera_new (const char* name = NULL) {
-    GuardedGError err;
-    ArvCamera* res = arv_camera_new (name, err.storeError());
-    // LOG_GERROR_ARAVIS(err);
-    err.log(logger_suffix);
-    return res;
-  }
-
-  namespace camera {
-
-    const char* get_vendor_name(ArvCamera *cam) {
-      GuardedGError err;
-      const char* res = arv_camera_get_vendor_name(cam, err.storeError());
-      LOG_GERROR_ARAVIS(err);
-      return res;
-    }
-
-    gint64 get_payload(ArvCamera *cam) {
-      GuardedGError err;
-      gint64 res = arv_camera_get_payload(cam, err.storeError());
-      LOG_GERROR_ARAVIS(err);
-      return res;
-    }
-
-    double get_frame_rate(ArvCamera *cam) {
-      GuardedGError err;
-      double res = arv_camera_get_frame_rate(cam, err.storeError());
-      LOG_GERROR_ARAVIS(err);
-      return res;
-    }
-
-    void set_frame_rate(ArvCamera *cam, double val) {
-      GuardedGError err;
-      arv_camera_set_frame_rate(cam, val, err.storeError());
-      LOG_GERROR_ARAVIS(err);
-    }
-
-    double get_exposure_time(ArvCamera *cam){
-      GuardedGError err;
-      double res = arv_camera_get_exposure_time(cam, err.storeError());
-      LOG_GERROR_ARAVIS(err);
-      return res;
-    }
-
-    void set_exposure_time(ArvCamera *cam, double val){
-      GuardedGError err;
-      arv_camera_set_exposure_time(cam, val, err.storeError());
-      LOG_GERROR_ARAVIS(err);
-    }
-
-    double get_gain(ArvCamera *cam){
-      GuardedGError err;
-      double res = arv_camera_get_gain(cam, err.storeError());
-      LOG_GERROR_ARAVIS(err);
-      return res;
-    }
-
-    void set_gain(ArvCamera *cam, double val){
-      GuardedGError err;
-      arv_camera_set_gain(cam, val, err.storeError());
-      LOG_GERROR_ARAVIS(err);
-    }
-
-    void get_region(ArvCamera* cam, gint* x, gint* y, gint* width, gint* height) {
-        GuardedGError err;
-        arv_camera_get_region(cam, x, y, width, height, err.storeError());
-        LOG_GERROR_ARAVIS(err);
-    }
-
-    void set_region(ArvCamera* cam, gint x, gint y, gint width, gint height) {
-      GuardedGError err;
-      arv_camera_set_region(cam, x, y, width, height, err.storeError());
-      LOG_GERROR_ARAVIS(err);
-    }
-
-    void get_sensor_size(ArvCamera* cam, gint* width, gint* height) {
-        GuardedGError err;
-        arv_camera_get_sensor_size(cam, width, height, err.storeError());
-        LOG_GERROR_ARAVIS(err);
-    }
-
-    ArvStream* create_stream(ArvCamera* cam, ArvStreamCallback callback, void* user_data) {
-      GuardedGError err;
-      ArvStream* res = arv_camera_create_stream(cam, callback, user_data, err.storeError());
-      LOG_GERROR_ARAVIS(err);
-      return res;
-    }
-
-    void start_acquisition(ArvCamera* cam) {
-      GuardedGError err;
-      arv_camera_start_acquisition(cam, err.storeError());
-      LOG_GERROR_ARAVIS(err);
-    }
-
-
-    namespace bounds {
-
-      void get_width(ArvCamera *cam, gint* min, gint* max) {
-        GuardedGError err;
-        arv_camera_get_width_bounds(cam, min, max, err.storeError());
-        LOG_GERROR_ARAVIS(err);
-      }
-
-      void get_height(ArvCamera *cam, gint* min, gint* max) {
-        GuardedGError err;
-        arv_camera_get_height_bounds(cam, min, max, err.storeError());
-        LOG_GERROR_ARAVIS(err);
-      }
-
-      void get_exposure_time(ArvCamera *cam, double* min, double* max) {
-        GuardedGError err;
-        arv_camera_get_exposure_time_bounds(cam, min, max, err.storeError());
-        LOG_GERROR_ARAVIS(err);
-      }
-
-      void get_gain(ArvCamera *cam, double* min, double* max) {
-        GuardedGError err;
-        arv_camera_get_gain_bounds(cam, min, max, err.storeError());
-        LOG_GERROR_ARAVIS(err);
-      }
-
-      void get_frame_rate(ArvCamera *cam, double* min, double* max) {
-        GuardedGError err;
-        arv_camera_get_frame_rate_bounds(cam, min, max, err.storeError());
-        LOG_GERROR_ARAVIS(err);
-      }
-
-
-    }
-
-    namespace gv {
-      void select_stream_channel(ArvCamera* cam, gint channel_id){
-        GuardedGError err;
-        arv_camera_gv_select_stream_channel(cam, channel_id, err.storeError());
-        LOG_GERROR_ARAVIS(err);
-      }
-    }
-  }
-}
-
-CameraAravisNodelet::CameraAravisNodelet()
-{
-}
 
 CameraAravisNodelet::~CameraAravisNodelet()
 {
@@ -378,6 +100,27 @@ CameraAravisNodelet::~CameraAravisNodelet()
   }
   g_object_unref(p_camera_);
 }
+
+#if ARAVIS_HAS_USB_MODE
+ArvUvUsbMode parse_usb_mode(const std::string& usb_mode_arg){
+    if (usb_mode_arg.size() <= 0) {
+        ROS_WARN("Empty USB mode (recognized modes: SYNC, ASYNC and DEFAULT), using DEFAULT ...");
+        return ARV_UV_USB_MODE_DEFAULT;
+    }
+    if (usb_mode_arg[0] == 's' or usb_mode_arg[0] == 'S') {
+        return ARV_UV_USB_MODE_SYNC;
+    } else if (usb_mode_arg[0] == 'a' or usb_mode_arg[0] == 'A') {
+        return ARV_UV_USB_MODE_ASYNC;
+    } else if (usb_mode_arg[0] == 'd' or usb_mode_arg[0] == 'D') {
+        return ARV_UV_USB_MODE_DEFAULT;
+    }
+
+    ROS_WARN_STREAM("Unrecognized USB mode "
+                    << usb_mode_arg << " (recognized modes: SYNC, ASYNC and DEFAULT), using DEFAULT ...");
+    return ARV_UV_USB_MODE_DEFAULT;
+}
+#endif
+
 
 void CameraAravisNodelet::onInit()
 {
@@ -451,14 +194,10 @@ void CameraAravisNodelet::onInit()
   reconfigure_server_->getConfigMax(config_max_);
 
   // See which features exist in this camera device
-  discoverFeatures();
+  implemented_features_ = internal::discover_features(p_device_);
 
   // Check the number of streams for this camera
-  num_streams_ = arv_device_get_integer_feature_value(p_device_, "DeviceStreamChannelCount", nullptr);
-  // if this return 0, try the deprecated GevStreamChannelCount in case this is an older camera
-  if (!num_streams_ && arv_camera_is_gv_device(p_camera_)) {
-    num_streams_ = arv_device_get_integer_feature_value(p_device_, "GevStreamChannelCount", nullptr);
-  }
+  num_streams_ = aravis::device::get_num_streams(p_device_);
   // if this also returns 0, assume number of streams = 1
   if (!num_streams_) {
     ROS_WARN("Unable to detect number of supported stream channels, assuming 1 ...");
@@ -514,31 +253,14 @@ void CameraAravisNodelet::onInit()
   }
 
 #if ARAVIS_HAS_USB_MODE
-  ArvUvUsbMode usb_mode = ARV_UV_USB_MODE_DEFAULT;
-  // ArvUvUsbMode mode = ARV_UV_USB_MODE_SYNC;
-  // ArvUvUsbMode mode = ARV_UV_USB_MODE_ASYNC;
-  std::string usb_mode_arg = "default";
-  if (pnh.getParam("usb_mode", usb_mode_arg)) {
-    if (usb_mode_arg.size() > 0) {
-      if (usb_mode_arg[0] == 's' or usb_mode_arg[0] == 'S') { usb_mode = ARV_UV_USB_MODE_SYNC; }
-      else if (usb_mode_arg[0] == 'a' or usb_mode_arg[0] == 'A') { usb_mode = ARV_UV_USB_MODE_ASYNC; }
-      else if (usb_mode_arg[0] == 'd' or usb_mode_arg[0] == 'D') { usb_mode = ARV_UV_USB_MODE_DEFAULT; }
-      else {
-          ROS_WARN_STREAM("Unrecognized USB mode "
-                          << usb_mode_arg << " (recognized modes: SYNC, ASYNC and DEFAULT), using DEFAULT ...");
-      }
-    } else {
-          ROS_WARN("Empty USB mode (recognized modes: SYNC, ASYNC and DEFAULT), using DEFAULT ...");
-    }
-  }
-  if (arv_camera_is_uv_device(p_camera_)) arv_uv_device_set_usb_mode(ARV_UV_DEVICE(p_device_), usb_mode);
+  ArvUvUsbMode usb_mode = parse_usb_mode(pnh.param<std::string>("usb_mode", "default"));
+  aravis::device::USB3Vision::set_usb_mode(p_device_, usb_mode);
 #endif
 
   if (pnh.param("load_user_set", false)) {
-      if (pnh.hasParam("UserSetSelector")) {
-        std::string user_set;
-        pnh.getParam("UserSetSelector", user_set);
-        aravis::device::feature::set_string(p_device_, "UserSetSelector", user_set.c_str());
+      std::string user_set;
+      if (pnh.getParam("UserSetSelector", user_set)) {
+          aravis::device::feature::set_string(p_device_, "UserSetSelector", user_set.c_str());
       }
       aravis::device::execute_command(p_device_, "UserSetLoad");
   }
@@ -724,10 +446,9 @@ void CameraAravisNodelet::onInit()
   ROS_INFO("    Model name           = %s", aravis::device::feature::get_string(p_device_, "DeviceModelName"));
   ROS_INFO("    Device id            = %s", aravis::device::feature::get_string(p_device_, "DeviceUserID"));
   ROS_INFO("    Serial number        = %s", aravis::device::feature::get_string(p_device_, "DeviceSerialNumber"));
-  ROS_INFO(
-      "    Type                 = %s",
-      arv_camera_is_uv_device(p_camera_) ? "USB3Vision" :
-          (arv_camera_is_gv_device(p_camera_) ? "GigEVision" : "Other"));
+  const char* device_type =
+      aravis::device::is_uv(p_device_) ? "USB3Vision" : (aravis::device::is_gv(p_device_) ? "GigEVision" : "Other");
+  ROS_INFO("    Type                 = %s", device_type);
   ROS_INFO("    Sensor width         = %d", sensors_[0]->width);
   ROS_INFO("    Sensor height        = %d", sensors_[0]->height);
   ROS_INFO("    ROI x,y,w,h          = %d, %d, %d, %d", roi_.x, roi_.y, roi_.width, roi_.height);
@@ -775,7 +496,7 @@ void CameraAravisNodelet::onInit()
 
   // Reset PTP clock
   if (use_ptp_stamp_)
-    resetPtpClock();
+    internal::resetPtpClock(p_device_);
 
   // spawn camera stream in thread, so onInit() is not blocked
   spawning_ = true;
@@ -805,7 +526,7 @@ void CameraAravisNodelet::spawnStream()
 
         if (arv_camera_is_gv_device(p_camera_))
         {
-          tuneGvStream(reinterpret_cast<ArvGvStream*>(p_streams_[i]));
+          internal::tuneGvStream(reinterpret_cast<ArvGvStream*>(p_streams_[i]));
         }
         break;
       }
@@ -873,108 +594,6 @@ void CameraAravisNodelet::spawnStream()
   this->exec_command_service_ = pnh.advertiseService("execute_command", &CameraAravisNodelet::executeCommandCallback, this);
 
   ROS_INFO("Done initializing camera_aravis.");
-}
-
-bool CameraAravisNodelet::getIntegerFeatureCallback(camera_aravis::get_integer_feature_value::Request& request, camera_aravis::get_integer_feature_value::Response& response)
-{
-  GuardedGError error;
-  const char* feature_name = request.feature.c_str();
-  response.response = arv_device_get_integer_feature_value(this->p_device_, feature_name, error.storeError());
-  LOG_GERROR_ARAVIS(error);
-  return !error;
-}
-
-bool CameraAravisNodelet::setIntegerFeatureCallback(camera_aravis::set_integer_feature_value::Request& request, camera_aravis::set_integer_feature_value::Response& response)
-{
-  GuardedGError error;
-  const char* feature_name = request.feature.c_str();
-  guint64 value = request.value;
-  arv_device_set_integer_feature_value(this->p_device_, feature_name, value, error.storeError());
-  LOG_GERROR_ARAVIS(error);
-  response.ok = !error;
-  return true;
-}
-
-bool CameraAravisNodelet::getFloatFeatureCallback(camera_aravis::get_float_feature_value::Request& request, camera_aravis::get_float_feature_value::Response& response)
-{
-  GuardedGError error;
-  const char* feature_name = request.feature.c_str();
-  response.response = arv_device_get_float_feature_value(this->p_device_, feature_name, error.storeError());
-  LOG_GERROR_ARAVIS(error);
-  return !error;
-}
-
-bool CameraAravisNodelet::setFloatFeatureCallback(camera_aravis::set_float_feature_value::Request& request, camera_aravis::set_float_feature_value::Response& response)
-{
-  GuardedGError error;
-  const char* feature_name = request.feature.c_str();
-  const double value = request.value;
-  arv_device_set_float_feature_value(this->p_device_, feature_name, value, error.storeError());
-  LOG_GERROR_ARAVIS(error);
-  response.ok = !error;
-  return true;
-}
-
-bool CameraAravisNodelet::getStringFeatureCallback(camera_aravis::get_string_feature_value::Request& request, camera_aravis::get_string_feature_value::Response& response)
-{
-  GuardedGError error;
-  const char* feature_name = request.feature.c_str();
-  response.response = arv_device_get_string_feature_value(this->p_device_, feature_name, error.storeError());
-  LOG_GERROR_ARAVIS(error);
-  return !error;
-}
-
-bool CameraAravisNodelet::setStringFeatureCallback(camera_aravis::set_string_feature_value::Request& request, camera_aravis::set_string_feature_value::Response& response)
-{
-  GuardedGError error;
-  const char* feature_name = request.feature.c_str();
-  const char* value = request.value.c_str();
-  arv_device_set_string_feature_value(this->p_device_, feature_name, value, error.storeError());
-  LOG_GERROR_ARAVIS(error);
-  response.ok = !error;
-  return true;
-}
-
-bool CameraAravisNodelet::getBooleanFeatureCallback(camera_aravis::get_boolean_feature_value::Request& request, camera_aravis::get_boolean_feature_value::Response& response)
-{
-  GuardedGError error;
-  const char* feature_name = request.feature.c_str();
-  response.response = arv_device_get_boolean_feature_value(this->p_device_, feature_name, error.storeError());
-  LOG_GERROR_ARAVIS(error);
-  return !error;
-}
-
-bool CameraAravisNodelet::setBooleanFeatureCallback(camera_aravis::set_boolean_feature_value::Request& request, camera_aravis::set_boolean_feature_value::Response& response)
-{
-  GuardedGError error;
-  const char* feature_name = request.feature.c_str();
-  const bool value = request.value;
-  arv_device_set_boolean_feature_value(this->p_device_, feature_name, value, error.storeError());
-  LOG_GERROR_ARAVIS(error);
-  response.ok = !error;
-  return true;
-}
-
-bool CameraAravisNodelet::executeCommandCallback(camera_aravis::execute_command::Request& request, camera_aravis::execute_command::Response& response) {
-  GuardedGError error;
-  const char* command = request.command.c_str();
-  arv_device_execute_command(this->p_device_, command, error.storeError());
-  LOG_GERROR_ARAVIS(error);
-  response.response = !error;
-  return true;
-}
-
-void CameraAravisNodelet::resetPtpClock()
-{
-  // a PTP slave can take the following states: Slave, Listening, Uncalibrated, Faulty, Disabled
-  std::string ptp_status(aravis::device::feature::get_string(p_device_, "GevIEEE1588Status"));
-  if (ptp_status == std::string("Faulty") || ptp_status == std::string("Disabled"))
-  {
-    ROS_INFO("camera_aravis: Reset ptp clock (was set to %s)", ptp_status.c_str());
-    aravis::device::feature::set_boolean(p_device_, "GevIEEE1588", false);
-    aravis::device::feature::set_boolean(p_device_, "GevIEEE1588", true);
-  }
-  
 }
 
 void CameraAravisNodelet::cameraAutoInfoCallback(const CameraAutoInfoConstPtr &msg_ptr)
@@ -1223,34 +842,6 @@ void CameraAravisNodelet::setExtendedCameraInfo(std::string channel_name, size_t
   }
 }
 
-// Extra stream options for GigEVision streams.
-void CameraAravisNodelet::tuneGvStream(ArvGvStream *p_stream)
-{
-  gboolean b_auto_buffer = FALSE;
-  gboolean b_packet_resend = TRUE;
-  unsigned int timeout_packet = 40; // milliseconds
-  unsigned int timeout_frame_retention = 200;
-
-  if (p_stream)
-  {
-    if (!ARV_IS_GV_STREAM(p_stream))
-    {
-      ROS_WARN("Stream is not a GV_STREAM");
-      return;
-    }
-
-    if (b_auto_buffer)
-      g_object_set(p_stream, "socket-buffer", ARV_GV_STREAM_SOCKET_BUFFER_AUTO, "socket-buffer-size", 0,
-      NULL);
-    if (!b_packet_resend)
-      g_object_set(p_stream, "packet-resend",
-                   b_packet_resend ? ARV_GV_STREAM_PACKET_RESEND_ALWAYS : ARV_GV_STREAM_PACKET_RESEND_NEVER,
-                   NULL);
-    g_object_set(p_stream, "packet-timeout", timeout_packet * 1000, "frame-retention", timeout_frame_retention * 1000,
-    NULL);
-  }
-}
-
 void CameraAravisNodelet::rosReconfigureCallback(Config &config, uint32_t level)
 {
   reconfigure_mutex_.lock();
@@ -1269,7 +860,7 @@ void CameraAravisNodelet::rosReconfigureCallback(Config &config, uint32_t level)
   config.frame_id = tf::resolve(tf_prefix, config.frame_id);
 
   if (use_ptp_stamp_)
-    resetPtpClock();
+    internal::resetPtpClock(p_device_);
 
   // stop auto functions if slave
   if (config.AutoSlave)
@@ -1602,7 +1193,7 @@ void CameraAravisNodelet::newBufferReady(ArvStream *p_stream, CameraAravisNodele
 
       // check PTP status, camera cannot recover from "Faulty" by itself
       if (p_can->use_ptp_stamp_)
-        p_can->resetPtpClock();
+        internal::resetPtpClock(p_can->p_device_);
     }
     else
     {
@@ -1757,87 +1348,6 @@ void CameraAravisNodelet::publishTfLoop(double rate)
   }
 }
 
-void CameraAravisNodelet::discoverFeatures()
-{
-  implemented_features_.clear();
-  if (!p_device_)
-    return;
-
-  // get the root node of genicam description
-  ArvGc *gc = arv_device_get_genicam(p_device_);
-  if (!gc)
-    return;
-
-  std::unordered_set<ArvDomNode*> done;
-  std::list<ArvDomNode*> todo;
-  todo.push_front((ArvDomNode*)arv_gc_get_node(gc, "Root"));
-
-  while (!todo.empty())
-  {
-    // get next entry
-    ArvDomNode *node = todo.front();
-    todo.pop_front();
-
-    if (done.find(node) != done.end()) continue;
-    done.insert(node);
-
-    const std::string name(arv_dom_node_get_node_name(node));
-
-    // Do the indirection
-    if (name[0] == 'p')
-    {
-      if (name.compare("pInvalidator") == 0)
-      {
-        continue;
-      }
-      ArvDomNode *inode = (ArvDomNode*)arv_gc_get_node(gc,
-                                                       arv_dom_node_get_node_value(arv_dom_node_get_first_child(node)));
-      if (inode)
-        todo.push_front(inode);
-      continue;
-    }
-
-    // check for implemented feature
-    if (ARV_IS_GC_FEATURE_NODE(node))
-    {
-      //if (!(ARV_IS_GC_CATEGORY(node) || ARV_IS_GC_ENUM_ENTRY(node) /*|| ARV_IS_GC_PORT(node)*/)) {
-      ArvGcFeatureNode *fnode = ARV_GC_FEATURE_NODE(node);
-      const std::string fname(arv_gc_feature_node_get_name(fnode));
-      const bool usable = arv_gc_feature_node_is_available(fnode, NULL)
-          && arv_gc_feature_node_is_implemented(fnode, NULL);
-
-      ROS_INFO_STREAM_COND(verbose_, "Feature " << fname << " is " << (usable ? "usable" : "not usable"));
-      implemented_features_.emplace(fname, usable);
-      //}
-    }
-
-//		if (ARV_IS_GC_PROPERTY_NODE(node)) {
-//			ArvGcPropertyNode* pnode = ARV_GC_PROPERTY_NODE(node);
-//			const std::string pname(arv_gc_property_node_get_name(pnode));
-//			ROS_INFO_STREAM("Property " << pname << " found");
-//		}
-
-    if (ARV_IS_GC_CATEGORY(node)) {
-        const GSList* features;
-        const GSList* iter;
-        features = arv_gc_category_get_features(ARV_GC_CATEGORY(node));
-        for (iter = features; iter != NULL; iter = iter->next) {
-            ArvDomNode* next = (ArvDomNode*) arv_gc_get_node(gc, (const char*) iter->data);
-            todo.push_front(next);
-        }
-
-        continue;
-    }
-
-    // add children in todo-list
-    ArvDomNodeList *children = arv_dom_node_get_child_nodes(node);
-    const uint l = arv_dom_node_list_get_length(children);
-    for (uint i = 0; i < l; ++i)
-    {
-      todo.push_front(arv_dom_node_list_get_item(children, i));
-    }
-  }
-}
 
 void CameraAravisNodelet::parseStringArgs(std::string in_arg_string, std::vector<std::string> &out_args) {
   size_t array_start = 0;
@@ -1878,7 +1388,7 @@ void CameraAravisNodelet::writeCameraFeaturesFromRosparam()
       const auto& elem = xml_rpc_params[i];
       if (elem.getType() != XmlRpc::XmlRpcValue::TypeString) {
         ROS_WARN_STREAM("Invalid value '" << std::string(elem) << "' in param: " << this->getName() << "/feature_load_order");
-        return
+        return;
       }
 
       XmlRpc::XmlRpcValue item;
@@ -1953,7 +1463,7 @@ void CameraAravisNodelet::writeCameraFeatureFromRosparam(const XmlRpc::XmlRpcVal
       case XmlRpc::XmlRpcValue::TypeArray:
       case XmlRpc::XmlRpcValue::TypeStruct:
       default:
-        ROS_WARN("Unhandled rosparam type in writeCameraFeaturesFromRosparam()");
+        ROS_WARN("Unhandled rosparam type in writeCameraFeaturesFromRosparam(), feature: %s", key.c_str());
     }
   }
 }
