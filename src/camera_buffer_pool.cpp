@@ -79,11 +79,15 @@ namespace camera_aravis {
         if (ARV_IS_STREAM(stream_)) {
             for (size_t i = 0; i < n; ++i) {
                 sensor_msgs::Image* p_img = new sensor_msgs::Image;
+
                 p_img->data.resize(payload_size_bytes_);
+
                 ArvBuffer* buffer = arv_buffer_new(payload_size_bytes_, p_img->data.data());
                 sensor_msgs::ImagePtr img_ptr(
                     p_img, boost::bind(&CameraBufferPool::reclaim, this->weak_from_this(), boost::placeholders::_1));
+
                 available_img_buffers_.emplace(p_img->data.data(), img_ptr);
+
                 arv_stream_push_buffer(stream_, buffer);
                 ++n_buffers_;
             }

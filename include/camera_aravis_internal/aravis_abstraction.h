@@ -86,6 +86,12 @@ namespace camera_aravis {
 
             void get_sensor_size(ArvCamera* cam, gint* width, gint* height);
 
+            bool is_frame_rate_available(ArvCamera* cam);
+
+            bool is_exposure_time_available(ArvCamera* cam);
+
+            bool is_gain_available(ArvCamera* cam);
+
             ArvStream* create_stream(ArvCamera* cam, ArvStreamCallback callback, void* user_data);
 
             void start_acquisition(ArvCamera* cam);
@@ -109,6 +115,12 @@ namespace camera_aravis {
                 void select_stream_channel(ArvCamera* cam, gint channel_id);
             }  // namespace gv
         }      // namespace camera
+
+        namespace buffer {
+            // Conversions from integers to Arv types.
+            const char* status_string(ArvBufferStatus status);
+
+        }
     }          // namespace aravis
 }  // namespace camera_aravis
 

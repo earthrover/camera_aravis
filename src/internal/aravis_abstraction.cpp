@@ -78,7 +78,7 @@ namespace camera_aravis {
             }      // namespace feature
 
             bool is_gv(ArvDevice* dev) { return ARV_IS_GV_DEVICE(dev); }
-            bool is_uv(ArvDevice* dev) { return ARV_IS_GV_DEVICE(dev); }
+            bool is_uv(ArvDevice* dev) { return ARV_IS_UV_DEVICE(dev); }
 
             gint64 get_num_streams(ArvDevice* dev) {
                 gint64 num_streams = arv_device_get_integer_feature_value(dev, "DeviceStreamChannelCount", nullptr);
@@ -92,8 +92,20 @@ namespace camera_aravis {
 
             namespace USB3Vision {
 #if ARAVIS_HAS_USB_MODE
+                const char* usb_mode_string(ArvUvUsbMode usb_mode) {
+                    switch (usb_mode) {
+                        case ARV_UV_USB_MODE_SYNC: return "ARV_UV_USB_MODE_SYNC";
+                        case ARV_UV_USB_MODE_ASYNC: return "ARV_UV_USB_MODE_ASYNC";
+                        // case ARV_UV_USB_MODE_DEFAULT: return "ARV_UV_USB_MODE_DEFAULT";
+                        default: return "Unhandled_aravis_usb_mode";
+                    }
+                }
+
                 void set_usb_mode(ArvDevice* dev, ArvUvUsbMode usb_mode) {
-                    if (is_uv(dev)) arv_uv_device_set_usb_mode(ARV_UV_DEVICE(dev), usb_mode);
+                    if (is_uv(dev)) {
+                        arv_uv_device_set_usb_mode(ARV_UV_DEVICE(dev), usb_mode);
+                        ROS_INFO("USB mode: %s", usb_mode_string(usb_mode));
+                    }
                 }
 #endif
             }  // namespace USB3Vision
@@ -181,6 +193,27 @@ namespace camera_aravis {
                 LOG_GERROR_ARAVIS(err);
             }
 
+            bool is_frame_rate_available(ArvCamera* cam) {
+                GuardedGError err;
+                bool res = static_cast<bool>(arv_camera_is_frame_rate_available(cam, err.storeError()));
+                LOG_GERROR_ARAVIS(err);
+                return res;
+            }
+
+            bool is_exposure_time_available(ArvCamera* cam) {
+                GuardedGError err;
+                bool res = static_cast<bool>(arv_camera_is_exposure_time_available(cam, err.storeError()));
+                LOG_GERROR_ARAVIS(err);
+                return res;
+            }
+
+            bool is_gain_available(ArvCamera* cam) {
+                GuardedGError err;
+                bool res = static_cast<bool>(arv_camera_is_gain_available(cam, err.storeError()));
+                LOG_GERROR_ARAVIS(err);
+                return res;
+            }
+
             ArvStream* create_stream(ArvCamera* cam, ArvStreamCallback callback, void* user_data) {
                 GuardedGError err;
                 ArvStream* res = arv_camera_create_stream(cam, callback, user_data, err.storeError());
@@ -238,5 +271,23 @@ namespace camera_aravis {
                 }
             }  // namespace gv
         }      // namespace camera
+
+        namespace buffer{
+            const char* status_string(ArvBufferStatus status) {
+                switch (status) {
+                    case ARV_BUFFER_STATUS_UNKNOWN: return "ARV_BUFFER_STATUS_UNKNOWN ";
+                    case ARV_BUFFER_STATUS_SUCCESS: return "ARV_BUFFER_STATUS_SUCCESS";
+                    case ARV_BUFFER_STATUS_CLEARED: return "ARV_BUFFER_STATUS_CLEARED";
+                    case ARV_BUFFER_STATUS_TIMEOUT: return "ARV_BUFFER_STATUS_TIMEOUT";
+                    case ARV_BUFFER_STATUS_MISSING_PACKETS: return "ARV_BUFFER_STATUS_MISSING_PACKETS";
+                    case ARV_BUFFER_STATUS_WRONG_PACKET_ID: return "ARV_BUFFER_STATUS_WRONG_PACKET_ID";
+                    case ARV_BUFFER_STATUS_SIZE_MISMATCH: return "ARV_BUFFER_STATUS_SIZE_MISMATCH";
+                    case ARV_BUFFER_STATUS_FILLING: return "ARV_BUFFER_STATUS_FILLING";
+                    case ARV_BUFFER_STATUS_ABORTED: return "ARV_BUFFER_STATUS_ABORTED";
+                    // case ARV_BUFFER_STATUS_PAYLOAD_NOT_SUPPORTED: return "ARV_BUFFER_STATUS_PAYLOAD_NOT_SUPPORTED";
+                    default: return "Unhandled_aravis_buffer_status";
+                }
+            }
+        }
     }          // namespace aravis
 }  // namespace camera_aravis

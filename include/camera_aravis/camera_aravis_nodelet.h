@@ -87,50 +87,52 @@ namespace camera_aravis {
         virtual ~CameraAravisNodelet();
 
         private:
-        bool verbose_ = false;
         std::string guid_ = "";
+        std::string frame_id_ = "";
         bool use_ptp_stamp_ = false;
-        bool pub_ext_camera_info_ = false;
-        bool pub_tf_optical_ = false;
 
         ArvCamera* p_camera_ = NULL;
         ArvDevice* p_device_ = NULL;
 
         gint num_streams_ = 0;
-        std::vector<ArvStream*> p_streams_;
         std::vector<std::string> stream_names_;
-        std::vector<CameraBufferPool::Ptr> p_buffer_pools_;
         int32_t acquire_ = 0;
-        std::vector<ConversionFunction> convert_formats;
 
         virtual void onInit() override;
         void spawnStream();
 
 
         protected:
-        // apply auto functions from a ros message
-        void cameraAutoInfoCallback(const CameraAutoInfoConstPtr& msg_ptr);
+        struct Sensor {
+            int32_t width = 0;
+            int32_t height = 0;
+            std::string pixel_format;
+            size_t n_bits_pixel = 0;
+        };
 
-        void syncAutoParameters();
-        void setAutoMaster(bool value);
-        void setAutoSlave(bool value);
+        struct Stream {
+            std::string name;
+            ArvStream* arv_stream;
+            Sensor sensor_description;
+            CameraBufferPool::Ptr buffer_pool;
+            std::unique_ptr<camera_info_manager::CameraInfoManager> camera_info_manager;
+            ros::NodeHandle camera_info_node_handle;
+            sensor_msgs::CameraInfoPtr camera_info;
+            image_transport::CameraPublisher camera_publisher;
+            ConversionFunction conversion_function;
+        };
 
-        void setExtendedCameraInfo(std::string channel_name, size_t stream_id);
-        void fillExtendedCameraInfoMessage(ExtendedCameraInfo& msg);
-
-        void rosReconfigureCallback(Config& config, uint32_t level);
+        void print_capabilities();
 
         // Start and stop camera on demand
         void rosConnectCallback();
 
         // Callback to wrap and send recorded image as ROS message
-        static void newBufferReadyCallback(ArvStream* p_stream, gpointer can_instance);
-
-        // Buffer Callback Helper
-        static void newBufferReady(ArvStream* p_stream,
-                                   CameraAravisNodelet* p_can,
+        static void newBufferReady(Stream& stream,
                                    std::string frame_id,
-                                   size_t stream_id);
+                                   int32_t width,
+                                   int32_t height,
+                                   bool use_ptp_stamp);
 
         // Clean-up if aravis device is lost
         static void controlLostCallback(ArvDevice* p_gv_device, gpointer can_instance);
@@ -172,12 +174,9 @@ namespace camera_aravis {
         bool executeCommandCallback(camera_aravis::execute_command::Request& request,
                                     camera_aravis::execute_command::Response& response);
 
-        // triggers a shot at regular intervals, sleeps in between
-        void softwareTriggerLoop();
+        void shutdown();
 
-        void publishTfLoop(double rate);
-
-        static void parseStringArgs(std::string in_arg_string, std::vector<std::string>& out_args);
+        static void parseStringArgs(const std::string& in_arg_string, std::vector<std::string>& out_args);
 
         // WriteCameraFeaturesFromRosparam()
         // Read ROS parameters from this node's namespace, and see if each parameter has a similarly named & typed
@@ -190,37 +189,11 @@ namespace camera_aravis {
         void writeCameraFeaturesFromRosparam();
         void writeCameraFeatureFromRosparam(const XmlRpc::XmlRpcValue::iterator::value_type& iter);
 
-        std::unique_ptr<dynamic_reconfigure::Server<Config>> reconfigure_server_;
-        boost::recursive_mutex reconfigure_mutex_;
-
-        std::vector<image_transport::CameraPublisher> cam_pubs_;
-        std::vector<std::unique_ptr<camera_info_manager::CameraInfoManager>> p_camera_info_managers_;
-        std::vector<std::unique_ptr<ros::NodeHandle>> p_camera_info_node_handles_;
-        std::vector<sensor_msgs::CameraInfoPtr> camera_infos_;
-
-        std::unique_ptr<tf2_ros::StaticTransformBroadcaster> p_stb_;
-        std::unique_ptr<tf2_ros::TransformBroadcaster> p_tb_;
-        geometry_msgs::TransformStamped tf_optical_;
-        std::thread tf_dyn_thread_;
-        std::atomic_bool tf_thread_active_;
-
-        CameraAutoInfo auto_params_;
-        ros::Publisher auto_pub_;
-        ros::Subscriber auto_sub_;
-
-        boost::recursive_mutex extended_camera_info_mutex_;
-        std::vector<ros::Publisher> extended_camera_info_pubs_;
-
-        Config config_;
-        Config config_min_;
-        Config config_max_;
 
         std::atomic<bool> spawning_;
         std::thread spawn_stream_thread_;
 
-        std::thread software_trigger_thread_;
-        std::atomic_bool software_trigger_active_;
-        size_t n_buffers_ = 0;
+        ros::Timer software_trigger_timer_;
 
         std::unordered_map<std::string, const bool> implemented_features_;
 
@@ -235,19 +208,15 @@ namespace camera_aravis {
             int32_t height_max = 0;
         } roi_;
 
-        struct Sensor {
-            int32_t width = 0;
-            int32_t height = 0;
-            std::string pixel_format;
-            size_t n_bits_pixel = 0;
-        };
-
-        std::vector<Sensor*> sensors_;
 
         struct StreamIdData {
             CameraAravisNodelet* can;
             size_t stream_id;
         };
+
+        std::vector<StreamIdData> stream_ids_;
+
+        std::vector<Stream> streams_;
     };
 
 }  // end namespace camera_aravis

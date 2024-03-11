@@ -19,6 +19,7 @@ namespace camera_aravis {
         GuardedGError error;
         const char* feature_name = request.feature.c_str();
         guint64 value = request.value;
+        ROS_INFO_STREAM("Camera aravis: setting " << feature_name << " = " << value);
         arv_device_set_integer_feature_value(this->p_device_, feature_name, value, error.storeError());
         LOG_GERROR_ARAVIS(error);
         response.ok = !error;
@@ -39,6 +40,7 @@ namespace camera_aravis {
         GuardedGError error;
         const char* feature_name = request.feature.c_str();
         const double value = request.value;
+        ROS_INFO_STREAM("Camera aravis: setting " << feature_name << " = " << value);
         arv_device_set_float_feature_value(this->p_device_, feature_name, value, error.storeError());
         LOG_GERROR_ARAVIS(error);
         response.ok = !error;
@@ -59,6 +61,7 @@ namespace camera_aravis {
         GuardedGError error;
         const char* feature_name = request.feature.c_str();
         const char* value = request.value.c_str();
+        ROS_INFO_STREAM("Camera aravis: setting " << feature_name << " = " << value);
         arv_device_set_string_feature_value(this->p_device_, feature_name, value, error.storeError());
         LOG_GERROR_ARAVIS(error);
         response.ok = !error;
@@ -79,6 +82,7 @@ namespace camera_aravis {
         GuardedGError error;
         const char* feature_name = request.feature.c_str();
         const bool value = request.value;
+        ROS_INFO_STREAM("Camera aravis: setting " << feature_name << " = " << value);
         arv_device_set_boolean_feature_value(this->p_device_, feature_name, value, error.storeError());
         LOG_GERROR_ARAVIS(error);
         response.ok = !error;

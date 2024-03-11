@@ -80,6 +80,7 @@ add_library(${PROJECT_NAME}
   src/camera_buffer_pool.cpp
   src/conversion_utils.cpp
   src/internal/aravis_abstraction.cpp
+  src/internal/print_capabilities.cpp
   src/internal/GErrorGuard.cpp
   src/internal/discover_features.cpp
   src/internal/service_callbacks.cpp
