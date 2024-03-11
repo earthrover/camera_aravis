@@ -3,7 +3,7 @@
 #include <ros/console.h>
 
 namespace camera_aravis::internal {
-    void resetPtpClock(ArvDevice* dev) {
+    void resetPtpClock(const NonOwnedGPtr<ArvDevice>& dev) {
         // a PTP slave can take the following states: Slave, Listening, Uncalibrated, Faulty, Disabled
         const std::string ptp_status = aravis::device::feature::get_string(dev, "GevIEEE1588Status");
 

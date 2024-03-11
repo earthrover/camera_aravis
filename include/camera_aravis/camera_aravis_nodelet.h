@@ -77,6 +77,9 @@ extern "C" {
 #include <camera_aravis/camera_buffer_pool.h>
 #include <camera_aravis/conversion_utils.h>
 
+
+#include <camera_aravis_internal/GPtr.h>
+
 namespace camera_aravis {
 
     typedef CameraAravisConfig Config;
@@ -91,8 +94,8 @@ namespace camera_aravis {
         std::string frame_id_ = "";
         bool use_ptp_stamp_ = false;
 
-        ArvCamera* p_camera_ = NULL;
-        ArvDevice* p_device_ = NULL;
+        GPtr<ArvCamera> camera = nullptr;
+        NonOwnedGPtr<ArvDevice> device = nullptr;
 
         gint num_streams_ = 0;
         std::vector<std::string> stream_names_;
@@ -112,7 +115,7 @@ namespace camera_aravis {
 
         struct Stream {
             std::string name;
-            ArvStream* arv_stream;
+            GPtr<ArvStream> arv_stream;
             Sensor sensor_description;
             CameraBufferPool::Ptr buffer_pool;
             std::unique_ptr<camera_info_manager::CameraInfoManager> camera_info_manager;

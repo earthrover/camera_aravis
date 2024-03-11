@@ -44,7 +44,7 @@ namespace camera_aravis {
 
     CameraAravisNodelet::~CameraAravisNodelet() {
         for (int i = 0; i < streams_.size(); i++) {
-            if (streams_[i].arv_stream) { arv_stream_set_emit_signals(streams_[i].arv_stream, FALSE); }
+            if (streams_[i].arv_stream) { arv_stream_set_emit_signals(streams_[i].arv_stream.get(), FALSE); }
         }
 
         software_trigger_timer_.stop();
@@ -56,14 +56,14 @@ namespace camera_aravis {
             guint64 n_completed_buffers = 0;
             guint64 n_failures = 0;
             guint64 n_underruns = 0;
-            arv_stream_get_statistics(streams_[i].arv_stream, &n_completed_buffers, &n_failures, &n_underruns);
+            arv_stream_get_statistics(streams_[i].arv_stream.get(), &n_completed_buffers, &n_failures, &n_underruns);
             ROS_INFO("Completed buffers = %Lu", (unsigned long long) n_completed_buffers);
             ROS_INFO("Failures          = %Lu", (unsigned long long) n_failures);
             ROS_INFO("Underruns         = %Lu", (unsigned long long) n_underruns);
-            if (aravis::device::is_gv(p_device_)) {
+            if (aravis::device::is_gv(device)) {
                 guint64 n_resent;
                 guint64 n_missing;
-                arv_gv_stream_get_statistics(reinterpret_cast<ArvGvStream*>(streams_[i].arv_stream), &n_resent,
+                arv_gv_stream_get_statistics(reinterpret_cast<ArvGvStream*>(streams_[i].arv_stream.get()), &n_resent,
                                              &n_missing);
                 ROS_INFO("Resent buffers    = %Lu", (unsigned long long) n_resent);
                 ROS_INFO("Missing           = %Lu", (unsigned long long) n_missing);
@@ -71,14 +71,10 @@ namespace camera_aravis {
         }
 
 
-        if (p_device_) {
-            aravis::device::execute_command(p_device_, "AcquisitionStop");
-            // aravis::device::execute_command(p_device_, "DeviceReset");
+        if (device) {
+            aravis::device::execute_command(device, "AcquisitionStop");
+            aravis::device::execute_command(device, "DeviceReset");
         }
-
-        // TODO: Use smart pointers
-        for (int i = 0; i < streams_.size(); i++) { g_object_unref(streams_[i].arv_stream); }
-        g_object_unref(p_camera_);
     }
 
 #if ARAVIS_HAS_USB_MODE
@@ -154,26 +150,26 @@ namespace camera_aravis {
         for (uint i = 0; i < n_devices; i++) ROS_INFO("Device%d: %s", i, arv_get_device_id(i));
 
         // Open the camera, and set it up.
-        while (!p_camera_) {
+        while (!camera) {
             if (guid_.empty()) {
                 ROS_INFO("Opening: (any)");
-                p_camera_ = aravis::camera_new();  // TODO: Use smart pointer
+                camera = aravis::camera_new();
             } else {
                 ROS_INFO_STREAM("Opening: " << guid_);
-                p_camera_ = aravis::camera_new(guid_.c_str());  // TODO: Use smart pointer
+                camera = aravis::camera_new(guid_.c_str());
             }
             ros::Duration(1.0).sleep();
         }
 
-        p_device_ = arv_camera_get_device(p_camera_);  // TODO: Use smart pointer
-        ROS_INFO("Opened: %s-%s", aravis::camera::get_vendor_name(p_camera_),
-                 aravis::device::feature::get_string(p_device_, "DeviceSerialNumber"));
+        device = aravis::camera::get_device(camera);
+        ROS_INFO("Opened: %s-%s", aravis::camera::get_vendor_name(camera),
+                 aravis::device::feature::get_string(device, "DeviceSerialNumber"));
 
         // See which features exist in this camera device
-        implemented_features_ = internal::discover_features(p_device_);
+        implemented_features_ = internal::discover_features(device);
 
         // Check the number of streams for this camera
-        num_streams_ = aravis::device::get_num_streams(p_device_);
+        num_streams_ = aravis::device::get_num_streams(device);
         // if this also returns 0, assume number of streams = 1
         if (!num_streams_) {
             ROS_WARN("Unable to detect number of supported stream channels, assuming 1 ...");
@@ -188,19 +184,19 @@ namespace camera_aravis {
 
 #if ARAVIS_HAS_USB_MODE
         ArvUvUsbMode usb_mode = parse_usb_mode(pnh.param<std::string>("usb_mode", "default"));
-        aravis::device::USB3Vision::set_usb_mode(p_device_, usb_mode);
+        aravis::device::USB3Vision::set_usb_mode(device, usb_mode);
 #endif
 
         if (pnh.param("load_user_set", false)) {
             std::string user_set;
             if (pnh.getParam("UserSetSelector", user_set)) {
-                aravis::device::feature::set_string(p_device_, "UserSetSelector", user_set.c_str());
+                aravis::device::feature::set_string(device, "UserSetSelector", user_set.c_str());
             }
-            aravis::device::execute_command(p_device_, "UserSetLoad");
+            aravis::device::execute_command(device, "UserSetLoad");
         }
 
-        aravis::camera::bounds::get_width(p_camera_, &roi_.width_min, &roi_.width_max);
-        aravis::camera::bounds::get_height(p_camera_, &roi_.height_min, &roi_.height_max);
+        aravis::camera::bounds::get_width(camera, &roi_.width_min, &roi_.width_max);
+        aravis::camera::bounds::get_height(camera, &roi_.height_min, &roi_.height_max);
 
 
         streams_.resize(num_streams_);
@@ -213,20 +209,20 @@ namespace camera_aravis {
             Stream& stream = streams_[i];
             if (stream_names_.size() > i) { stream.name = stream_names_.at(i); }
 
-            if (aravis::device::is_gv(p_device_)) { aravis::camera::gv::select_stream_channel(p_camera_, i); }
+            if (aravis::device::is_gv(device)) { aravis::camera::gv::select_stream_channel(camera, i); }
 
-            aravis::camera::get_sensor_size(p_camera_, &stream.sensor_description.width,
+            aravis::camera::get_sensor_size(camera, &stream.sensor_description.width,
                                             &stream.sensor_description.height);
 
             // Initial camera settings.
 
             // init default to full sensor resolution
-            aravis::camera::set_region(p_camera_, 0, 0, roi_.width_max, roi_.height_max);
+            aravis::camera::set_region(camera, 0, 0, roi_.width_max, roi_.height_max);
 
             // Set up the triggering.
             if (implemented_features_["TriggerMode"] && implemented_features_["TriggerSelector"]) {
-                aravis::device::feature::set_string(p_device_, "TriggerSelector", "FrameStart");
-                aravis::device::feature::set_string(p_device_, "TriggerMode", "Off");
+                aravis::device::feature::set_string(device, "TriggerSelector", "FrameStart");
+                aravis::device::feature::set_string(device, "TriggerMode", "Off");
             }
 
             // possibly set or override from given parameter
@@ -235,19 +231,19 @@ namespace camera_aravis {
             std::string source_selector = "Source" + std::to_string(i);
 
             if (implemented_features_["SourceSelector"]) {
-                aravis::device::feature::set_string(p_device_, "SourceSelector", source_selector.c_str());
+                aravis::device::feature::set_string(device, "SourceSelector", source_selector.c_str());
             }
 
             if (implemented_features_["PixelFormat"] && pixel_formats[i].size()) {
-                aravis::device::feature::set_string(p_device_, "PixelFormat", pixel_formats[i].c_str());
+                aravis::device::feature::set_string(device, "PixelFormat", pixel_formats[i].c_str());
             }
 
             if (implemented_features_["PixelFormat"]) {
                 stream.sensor_description.pixel_format =
-                    std::string(aravis::device::feature::get_string(p_device_, "PixelFormat"));
+                    std::string(aravis::device::feature::get_string(device, "PixelFormat"));
 
                 stream.sensor_description.n_bits_pixel =
-                    ARV_PIXEL_FORMAT_BIT_PER_PIXEL(aravis::device::feature::get_integer(p_device_, "PixelFormat"));
+                    ARV_PIXEL_FORMAT_BIT_PER_PIXEL(aravis::device::feature::get_integer(device, "PixelFormat"));
             }
 
             const auto& iter = CONVERSIONS_DICTIONARY.find(stream.sensor_description.pixel_format);
@@ -277,14 +273,14 @@ namespace camera_aravis {
         }
 
         // get current state of camera for config_
-        aravis::camera::get_region(p_camera_, &roi_.x, &roi_.y, &roi_.width, &roi_.height);
+        aravis::camera::get_region(camera, &roi_.x, &roi_.y, &roi_.width, &roi_.height);
 
         // Print information.
         print_capabilities();
 
 
         // Reset PTP clock
-        if (use_ptp_stamp_) { internal::resetPtpClock(p_device_); }
+        if (use_ptp_stamp_) { internal::resetPtpClock(device); }
 
         // spawn camera stream in thread, so onInit() is not blocked
         spawning_ = true;
@@ -300,7 +296,7 @@ namespace camera_aravis {
                         if (std::any_of(streams_.cbegin(), streams_.cend(), [](const Stream& stream) {
                                 return stream.camera_publisher.getNumSubscribers() > 0;
                             })) {
-                            aravis::device::execute_command(p_device_, "TriggerSoftware");
+                            aravis::device::execute_command(device, "TriggerSoftware");
                             ROS_ERROR("Software trigger");
                         }
 
@@ -335,9 +331,9 @@ namespace camera_aravis {
         for (int i = 0; i < num_streams_; i++) {
             Stream& stream = streams_[i];
             while (spawning_) {
-                if (aravis::device::is_gv(p_device_)) { aravis::camera::gv::select_stream_channel(p_camera_, i); }
+                if (aravis::device::is_gv(device)) { aravis::camera::gv::select_stream_channel(camera, i); }
 
-                stream.arv_stream = aravis::camera::create_stream(p_camera_, NULL, NULL);  // TODO: Use smart pointer
+                stream.arv_stream = aravis::camera::create_stream(camera, NULL, NULL);  // TODO: Use smart pointer
 
                 if (stream.arv_stream) { break; }
 
@@ -347,14 +343,14 @@ namespace camera_aravis {
             }
 
             // Load up some buffers.
-            if (aravis::device::is_gv(p_device_)) aravis::camera::gv::select_stream_channel(p_camera_, i);
+            if (aravis::device::is_gv(device)) aravis::camera::gv::select_stream_channel(camera, i);
 
-            const gint64 n_bytes_payload_stream = aravis::camera::get_payload(p_camera_);
+            const gint64 n_bytes_payload_stream = aravis::camera::get_payload(camera);
 
-            stream.buffer_pool = boost::make_shared<CameraBufferPool>(stream.arv_stream, n_bytes_payload_stream, 10);
+            stream.buffer_pool = boost::make_shared<CameraBufferPool>(stream.arv_stream.get(), n_bytes_payload_stream, 10);
 
-            if (arv_camera_is_gv_device(p_camera_)) {
-                internal::tuneGvStream(reinterpret_cast<ArvGvStream*>(stream.arv_stream));
+            if (aravis::device::is_gv(device)) {
+                internal::tuneGvStream(reinterpret_cast<ArvGvStream*>(stream.arv_stream.get()));
             }
 
             // Set up image_raw
@@ -366,7 +362,7 @@ namespace camera_aravis {
 
             // Connect signals with callbacks.
             g_signal_connect(
-                stream.arv_stream, "new-buffer",
+                stream.arv_stream.get(), "new-buffer",
                 (GCallback) +
                     [](ArvStream* p_stream, gpointer id_instance) {
                         // workaround to get access to the instance from a static method
@@ -381,17 +377,17 @@ namespace camera_aravis {
                                        data->can->use_ptp_stamp_);
 
                         // check PTP status, camera cannot recover from "Faulty" by itself
-                        if (data->can->use_ptp_stamp_) internal::resetPtpClock(data->can->p_device_);
+                        if (data->can->use_ptp_stamp_) internal::resetPtpClock(data->can->device);
                     },
                 &(stream_ids_[i]));
         }
-        g_signal_connect(p_device_, "control-lost", (GCallback) CameraAravisNodelet::controlLostCallback, this);
+        g_signal_connect(device.get(), "control-lost", (GCallback) CameraAravisNodelet::controlLostCallback, this);
 
-        for (int i = 0; i < num_streams_; i++) { arv_stream_set_emit_signals(streams_[i].arv_stream, TRUE); }
+        for (int i = 0; i < num_streams_; i++) { arv_stream_set_emit_signals(streams_[i].arv_stream.get(), TRUE); }
 
         if (std::any_of(streams_.cbegin(), streams_.cend(),
                         [](const Stream& stream) { return stream.camera_publisher.getNumSubscribers() > 0; })) {
-            aravis::camera::start_acquisition(p_camera_);
+            aravis::camera::start_acquisition(camera);
         }
 
         this->get_integer_service_ =
@@ -419,13 +415,13 @@ namespace camera_aravis {
     }
 
     void CameraAravisNodelet::rosConnectCallback() {
-        if (static_cast<bool>(p_device_)) {
+        if (static_cast<bool>(device)) {
             if (std::all_of(streams_.cbegin(), streams_.cend(),
                             [](const Stream& stream) { return stream.camera_publisher.getNumSubscribers() == 0; })) {
                 // don't waste CPU if nobody is listening!
-                aravis::device::execute_command(p_device_, "AcquisitionStop");
+                aravis::device::execute_command(device, "AcquisitionStop");
             } else {
-                aravis::device::execute_command(p_device_, "AcquisitionStart");
+                aravis::device::execute_command(device, "AcquisitionStart");
             }
         }
     }
@@ -435,11 +431,11 @@ namespace camera_aravis {
                                              int32_t width,
                                              int32_t height,
                                              bool use_ptp_stamp) {
-        ArvBuffer* p_buffer = arv_stream_try_pop_buffer(stream.arv_stream);
+        ArvBuffer* p_buffer = arv_stream_try_pop_buffer(stream.arv_stream.get());
 
         // check if we risk to drop the next image because of not enough buffers left
         gint n_available_buffers;
-        arv_stream_get_n_buffers(stream.arv_stream, &n_available_buffers, NULL);
+        arv_stream_get_n_buffers(stream.arv_stream.get(), &n_available_buffers, NULL);
 
 
         if (n_available_buffers == 0) { stream.buffer_pool->allocateBuffers(1); }
@@ -453,7 +449,7 @@ namespace camera_aravis {
                          aravis::buffer::status_string(arv_buffer_get_status(p_buffer)));
             }
 
-            arv_stream_push_buffer(stream.arv_stream, p_buffer);
+            arv_stream_push_buffer(stream.arv_stream.get(), p_buffer);
             return;
         }
 
@@ -580,7 +576,7 @@ namespace camera_aravis {
 
         std::string key = iter.first;
 
-        ArvGcNode* p_gc_node = arv_device_get_feature(p_device_, key.c_str());
+        ArvGcNode* p_gc_node = arv_device_get_feature(device.get(), key.c_str());
         if (p_gc_node && arv_gc_feature_node_is_implemented(ARV_GC_FEATURE_NODE(p_gc_node), &error)) {
 
             // We'd like to check the value types too, but typeValue is often given as G_TYPE_INVALID, so ignore it.
@@ -588,7 +584,7 @@ namespace camera_aravis {
                 case XmlRpc::XmlRpcValue::TypeBoolean:
                     {
                         bool value = (bool) iter.second;
-                        aravis::device::feature::set_boolean(p_device_, key.c_str(), value);
+                        aravis::device::feature::set_boolean(device, key.c_str(), value);
                         ROS_INFO("Read parameter (bool) %s: %s", key.c_str(), value ? "true" : "false");
                     }
                     break;
@@ -596,7 +592,7 @@ namespace camera_aravis {
                 case XmlRpc::XmlRpcValue::TypeInt:
                     {
                         int value = (int) iter.second;
-                        aravis::device::feature::set_integer(p_device_, key.c_str(), value);
+                        aravis::device::feature::set_integer(device, key.c_str(), value);
                         ROS_INFO("Read parameter (int) %s: %d", key.c_str(), value);
                     }
                     break;
@@ -604,7 +600,7 @@ namespace camera_aravis {
                 case XmlRpc::XmlRpcValue::TypeDouble:
                     {
                         double value = (double) iter.second;
-                        aravis::device::feature::set_float(p_device_, key.c_str(), value);
+                        aravis::device::feature::set_float(device, key.c_str(), value);
                         ROS_INFO("Read parameter (float) %s: %f", key.c_str(), value);
                     }
                     break;
@@ -612,7 +608,7 @@ namespace camera_aravis {
                 case XmlRpc::XmlRpcValue::TypeString:
                     {
                         std::string value = (std::string) iter.second;
-                        aravis::device::feature::set_string(p_device_, key.c_str(), value.c_str());
+                        aravis::device::feature::set_string(device, key.c_str(), value.c_str());
                         ROS_INFO("Read parameter (string) %s: %s", key.c_str(), value.c_str());
                     }
                     break;
