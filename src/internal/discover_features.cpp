@@ -6,13 +6,13 @@
 
 namespace camera_aravis::internal {
 
-    std::unordered_map<std::string, const bool> discover_features(ArvDevice* device) {
+    std::unordered_map<std::string, const bool> discover_features(const NonOwnedGPtr<ArvDevice>& device) {
         std::unordered_map<std::string, const bool> implemented_features;
 
         if (!device) return implemented_features;
 
         // get the root node of genicam description
-        ArvGc* gc = arv_device_get_genicam(device);
+        ArvGc* gc = arv_device_get_genicam(device.get());
         if (!gc) return implemented_features;
 
         std::unordered_set<ArvDomNode*> done;
@@ -65,5 +65,7 @@ namespace camera_aravis::internal {
             const uint l = arv_dom_node_list_get_length(children);
             for (uint i = 0; i < l; ++i) { todo.push_front(arv_dom_node_list_get_item(children, i)); }
         }
+
+        return implemented_features;
     }
 }  // namespace camera_aravis::internal

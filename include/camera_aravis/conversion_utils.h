@@ -31,12 +31,6 @@
 
 namespace camera_aravis {
 
-    // Conversions from integers to Arv types.
-    static const char* szBufferStatusFromInt[] = {
-        "ARV_BUFFER_STATUS_SUCCESS",         "ARV_BUFFER_STATUS_CLEARED",         "ARV_BUFFER_STATUS_TIMEOUT",
-        "ARV_BUFFER_STATUS_MISSING_PACKETS", "ARV_BUFFER_STATUS_WRONG_PACKET_ID", "ARV_BUFFER_STATUS_SIZE_MISMATCH",
-        "ARV_BUFFER_STATUS_FILLING",         "ARV_BUFFER_STATUS_ABORTED"};
-
     // Conversion functions from Genicam to ROS formats
     using ConversionFunction = std::function<void(sensor_msgs::ImagePtr& in, sensor_msgs::ImagePtr& out)>;
 

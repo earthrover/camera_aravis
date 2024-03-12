@@ -3,7 +3,7 @@
 #ifndef CAMERA_ARAVIS_INTERNAL_ARAVIS_ABSTRACTION_H
 #define CAMERA_ARAVIS_INTERNAL_ARAVIS_ABSTRACTION_H
 
-#include <camera_aravis_internal/GErrorGuard.h>
+#include <camera_aravis_internal/GPtr.h>
 
 extern "C" {
 #include <arv.h>
@@ -21,94 +21,108 @@ extern "C" {
 namespace camera_aravis {
     namespace aravis {
         namespace device {
-            void execute_command(ArvDevice* dev, const char* cmd);
+            void execute_command(const NonOwnedGPtr<ArvDevice>& dev, const char* cmd);
 
             namespace feature {
-                gboolean get_boolean(ArvDevice* dev, const char* feat);
+                gboolean get_boolean(const NonOwnedGPtr<ArvDevice>& dev, const char* feat);
 
-                void set_boolean(ArvDevice* dev, const char* feat, gboolean val);
+                void set_boolean(const NonOwnedGPtr<ArvDevice>& dev, const char* feat, gboolean val);
 
-                gint64 get_integer(ArvDevice* dev, const char* feat);
+                gint64 get_integer(const NonOwnedGPtr<ArvDevice>& dev, const char* feat);
 
-                void set_integer(ArvDevice* dev, const char* feat, gint64 val);
+                void set_integer(const NonOwnedGPtr<ArvDevice>& dev, const char* feat, gint64 val);
 
-                double get_float(ArvDevice* dev, const char* feat);
+                double get_float(const NonOwnedGPtr<ArvDevice>& dev, const char* feat);
 
-                void set_float(ArvDevice* dev, const char* feat, double val);
+                void set_float(const NonOwnedGPtr<ArvDevice>& dev, const char* feat, double val);
 
-                const char* get_string(ArvDevice* dev, const char* feat);
+                const char* get_string(const NonOwnedGPtr<ArvDevice>& dev, const char* feat);
 
-                void set_string(ArvDevice* dev, const char* feat, const char* val);
+                void set_string(const NonOwnedGPtr<ArvDevice>& dev, const char* feat, const char* val);
 
                 namespace bounds {
-                    void get_integer(ArvDevice* dev, const char* feat, gint64* min, gint64* max);
+                    void get_integer(const NonOwnedGPtr<ArvDevice>& dev, const char* feat, gint64* min, gint64* max);
 
-                    void get_float(ArvDevice* dev, const char* feat, double* min, double* max);
+                    void get_float(const NonOwnedGPtr<ArvDevice>& dev, const char* feat, double* min, double* max);
                 }  // namespace bounds
             }      // namespace feature
 
-            bool is_gv(ArvDevice* dev);
-            bool is_uv(ArvDevice* dev);
+            bool is_gv(const NonOwnedGPtr<ArvDevice>& dev);
+            bool is_uv(const NonOwnedGPtr<ArvDevice>& dev);
 
-            gint64 get_num_streams(ArvDevice* dev);
+            gint64 get_num_streams(const NonOwnedGPtr<ArvDevice>& dev);
 
             namespace USB3Vision {
 #if ARAVIS_HAS_USB_MODE
-                void set_usb_mode(ArvDevice* dev, ArvUvUsbMode usb_mode);
+                void set_usb_mode(const NonOwnedGPtr<ArvDevice>& dev, ArvUvUsbMode usb_mode);
 #endif
             }  // namespace USB3Vision
 
         }  // namespace device
 
-        ArvCamera* camera_new(const char* name = NULL);
+        GPtr<ArvCamera> camera_new(const char* name = NULL);
 
         namespace camera {
 
-            const char* get_vendor_name(ArvCamera* cam);
+            NonOwnedGPtr<ArvDevice> get_device(const NonOwnedGPtr<ArvCamera>& cam);
 
-            gint64 get_payload(ArvCamera* cam);
+            const char* get_vendor_name(const NonOwnedGPtr<ArvCamera>& cam);
 
-            double get_frame_rate(ArvCamera* cam);
+            gint64 get_payload(const NonOwnedGPtr<ArvCamera>& cam);
 
-            void set_frame_rate(ArvCamera* cam, double val);
+            double get_frame_rate(const NonOwnedGPtr<ArvCamera>& cam);
 
-            double get_exposure_time(ArvCamera* cam);
+            void set_frame_rate(const NonOwnedGPtr<ArvCamera>& cam, double val);
 
-            void set_exposure_time(ArvCamera* cam, double val);
+            double get_exposure_time(const NonOwnedGPtr<ArvCamera>& cam);
 
-            double get_gain(ArvCamera* cam);
+            void set_exposure_time(const NonOwnedGPtr<ArvCamera>& cam, double val);
 
-            void set_gain(ArvCamera* cam, double val);
+            double get_gain(const NonOwnedGPtr<ArvCamera>& cam);
 
-            void get_region(ArvCamera* cam, gint* x, gint* y, gint* width, gint* height);
+            void set_gain(const NonOwnedGPtr<ArvCamera>& cam, double val);
 
-            void set_region(ArvCamera* cam, gint x, gint y, gint width, gint height);
+            void get_region(const NonOwnedGPtr<ArvCamera>& cam, gint* x, gint* y, gint* width, gint* height);
 
-            void get_sensor_size(ArvCamera* cam, gint* width, gint* height);
+            void set_region(const NonOwnedGPtr<ArvCamera>& cam, gint x, gint y, gint width, gint height);
 
-            ArvStream* create_stream(ArvCamera* cam, ArvStreamCallback callback, void* user_data);
+            void get_sensor_size(const NonOwnedGPtr<ArvCamera>& cam, gint* width, gint* height);
 
-            void start_acquisition(ArvCamera* cam);
+            bool is_frame_rate_available(const NonOwnedGPtr<ArvCamera>& cam);
+
+            bool is_exposure_time_available(const NonOwnedGPtr<ArvCamera>& cam);
+
+            bool is_gain_available(const NonOwnedGPtr<ArvCamera>& cam);
+
+            GPtr<ArvStream> create_stream(const NonOwnedGPtr<ArvCamera>& cam, ArvStreamCallback callback, void* user_data);
+
+            void start_acquisition(const NonOwnedGPtr<ArvCamera>& cam);
 
 
             namespace bounds {
 
-                void get_width(ArvCamera* cam, gint* min, gint* max);
+                void get_width(const NonOwnedGPtr<ArvCamera>& cam, gint* min, gint* max);
 
-                void get_height(ArvCamera* cam, gint* min, gint* max);
+                void get_height(const NonOwnedGPtr<ArvCamera>& cam, gint* min, gint* max);
 
-                void get_exposure_time(ArvCamera* cam, double* min, double* max);
+                void get_exposure_time(const NonOwnedGPtr<ArvCamera>& cam, double* min, double* max);
 
-                void get_gain(ArvCamera* cam, double* min, double* max);
+                void get_gain(const NonOwnedGPtr<ArvCamera>& cam, double* min, double* max);
 
-                void get_frame_rate(ArvCamera* cam, double* min, double* max);
+                void get_frame_rate(const NonOwnedGPtr<ArvCamera>& cam, double* min, double* max);
 
             }  // namespace bounds
 
             namespace gv {
-                void select_stream_channel(ArvCamera* cam, gint channel_id);
+                void select_stream_channel(const NonOwnedGPtr<ArvCamera>& cam, gint channel_id);
             }  // namespace gv
         }      // namespace camera
+
+        namespace buffer {
+            // Conversions from integers to Arv types.
+            const char* status_string(ArvBufferStatus status);
+
+        }
     }          // namespace aravis
 }  // namespace camera_aravis
 
