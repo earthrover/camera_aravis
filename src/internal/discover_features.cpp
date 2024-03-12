@@ -65,5 +65,7 @@ namespace camera_aravis::internal {
             const uint l = arv_dom_node_list_get_length(children);
             for (uint i = 0; i < l; ++i) { todo.push_front(arv_dom_node_list_get_item(children, i)); }
         }
+
+        return implemented_features;
     }
 }  // namespace camera_aravis::internal
