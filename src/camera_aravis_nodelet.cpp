@@ -97,6 +97,15 @@ namespace camera_aravis {
     }
 #endif
 
+    std::string get_tf_prefix(const ros::NodeHandle& nh) {
+        std::string tf_prefix = "";
+        std::string tf_prefix_location;
+        if (nh.searchParam("tf_prefix", tf_prefix_location)) {
+            nh.getParam(tf_prefix_location, tf_prefix);
+            if (!tf_prefix.empty()) tf_prefix += "/";
+        }
+        return tf_prefix;
+    }
 
     void CameraAravisNodelet::onInit() {
         ros::NodeHandle pnh = getPrivateNodeHandle();
@@ -107,7 +116,7 @@ namespace camera_aravis {
         use_ptp_stamp_ = pnh.param<bool>("use_ptp_timestamp", use_ptp_stamp_);
 
         double software_trigger_rate = pnh.param<double>("software_trigger_rate", 0);
-        frame_id_ = pnh.param<std::string>("frame_id", frame_id_);
+        frame_id_ = get_tf_prefix(pnh) + pnh.param<std::string>("frame_id", frame_id_);
 
         std::string stream_channel_args;
         if (pnh.getParam("channel_names", stream_channel_args)) {
