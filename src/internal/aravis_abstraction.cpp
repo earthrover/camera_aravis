@@ -136,6 +136,27 @@ namespace camera_aravis {
                 return res;
             }
 
+            const char* get_model_name(const NonOwnedGPtr<ArvCamera>& cam) {
+                GuardedGError err;
+                const char* res = arv_camera_get_model_name(cam.get(), err.storeError());
+                LOG_GERROR_ARAVIS(err);
+                return res;
+            }
+
+            const char* get_serial_number(const NonOwnedGPtr<ArvCamera>& cam) {
+                GuardedGError err;
+                const char* res = arv_camera_get_device_serial_number(cam.get(), err.storeError());
+                LOG_GERROR_ARAVIS(err);
+                return res;
+            }
+
+            const char* get_user_id(const NonOwnedGPtr<ArvCamera>& cam) {
+                GuardedGError err;
+                const char* res = arv_camera_get_string(cam.get(), "DeviceUserID", err.storeError());
+                LOG_GERROR_ARAVIS(err);
+                return res;
+            }
+
             gint64 get_payload(const NonOwnedGPtr<ArvCamera>& cam) {
                 GuardedGError err;
                 gint64 res = arv_camera_get_payload(cam.get(), err.storeError());

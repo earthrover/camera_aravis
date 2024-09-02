@@ -40,7 +40,113 @@ PLUGINLIB_EXPORT_CLASS(camera_aravis::CameraAravisNodelet, nodelet::Nodelet)
 #include <camera_aravis_internal/resetPtpClock.h>
 #include <camera_aravis_internal/tuneGVStream.h>
 
+#include "diagnostic_updater/diagnostic_updater.h"
+
 namespace camera_aravis {
+
+    namespace {
+        namespace du = diagnostic_updater;
+        namespace dm = diagnostic_msgs;
+    }  // namespace
+
+    std::string a2s(const char* cstr) {
+        if (nullptr == cstr) return "";
+        return std::string(cstr);
+    }
+
+    struct CameraAravisNodelet::DiagnosticsHandler {
+        private:
+        CameraAravisNodelet* parent;
+        du::Updater updater;
+
+        bool camera_search_added = false;
+
+        ros::Timer timer;
+
+        public:
+        DiagnosticsHandler(CameraAravisNodelet* parent,
+                           ros::NodeHandle nh = ros::NodeHandle(),
+                           ros::NodeHandle pnh = ros::NodeHandle("~"),
+                           const std::string& node_name = ros::this_node::getName()):
+            parent(parent), updater(nh, pnh, node_name) {
+            updater.add("Devices available", [&](du::DiagnosticStatusWrapper& diag) {
+                arv_update_device_list();
+                uint n_interfaces = arv_get_n_interfaces();
+                uint n_devices = arv_get_n_devices();
+
+                diag.add("Interfaces available", n_interfaces);
+                diag.add("Devices available", n_devices);
+
+                if (n_interfaces < 1) {
+                    diag.summary(dm::DiagnosticStatus::ERROR, "No genicam interfaces available");
+                } else if (n_devices < 1) {
+                    diag.summary(dm::DiagnosticStatus::ERROR, "No genicam devices available");
+                } else {
+                    diag.summary(dm::DiagnosticStatus::OK, "Devices available");
+                }
+            });
+
+            timer = pnh.createTimer(
+                ros::Duration(updater.getPeriod()), [&](const ros::TimerEvent& evt) { updater.update(); }, false,
+                false);
+        }
+
+        du::Updater& get_updater() { return updater; }
+
+        void start_publishing() { timer.start(); }
+
+        void setup_camera_seach(const std::string& guid) {
+            if (camera_search_added) return;
+            camera_search_added = true;
+            updater.add("Camera search", [&](du::DiagnosticStatusWrapper& diag) {
+                bool has_camera = bool(parent->camera);
+
+                diag.add("Camera to seach", guid);
+
+                if (has_camera) {
+                    diag.add("Camera vendor name", a2s(aravis::camera::get_vendor_name(parent->camera)));
+                    diag.add("Camera model name", a2s(aravis::camera::get_model_name(parent->camera)));
+                    diag.add("Camera serial number", a2s(aravis::camera::get_serial_number(parent->camera)));
+                    diag.add("Camera user id", a2s(aravis::camera::get_user_id(parent->camera)));
+                }
+
+                if (has_camera) {
+                    diag.summary(dm::DiagnosticStatus::OK, "Camera found");
+                } else {
+                    diag.summary(dm::DiagnosticStatus::ERROR, "Camera not found");
+                }
+            });
+        }
+
+        void setup_stream(GPtr<ArvStream> stream_ptr) {
+            updater.add("Camera search", [&](du::DiagnosticStatusWrapper& diag) {
+                guint64 n_completed_buffers = 0;
+                guint64 n_failures = 0;
+                guint64 n_underruns = 0;
+                arv_stream_get_statistics(stream_ptr.get(), &n_completed_buffers, &n_failures, &n_underruns);
+
+                const guint num_infos = arv_stream_get_n_infos(stream_ptr.get());
+
+                for (guint info_idx = 0; info_idx < num_infos; ++info_idx) {
+                    auto info_type = arv_stream_get_info_type(stream_ptr.get(), info_idx);
+                    const std::string name = std::string(arv_stream_get_info_name(stream_ptr.get(), info_idx));
+                    switch (info_type) {
+                        case G_TYPE_UINT64: diag.add(name, arv_stream_get_info_uint64(stream_ptr.get(), info_idx)); break;
+                        case G_TYPE_DOUBLE: diag.add(name, arv_stream_get_info_double(stream_ptr.get(), info_idx)); break;
+                        default: diag.addf(name, "Unknown diagnostic type " G_GSIZE_MODIFIER, info_type);
+                    }
+                }
+
+                if (n_failures > 0) {
+                    diag.summaryf(dm::DiagnosticStatus::ERROR, G_GUINT64_FORMAT " Failures detected", n_failures);
+                } else if (n_underruns > 0) {
+                    diag.summaryf(dm::DiagnosticStatus::WARN, G_GUINT64_FORMAT " Underruns detected", n_underruns);
+                } else {
+                    diag.summaryf(dm::DiagnosticStatus::OK, G_GUINT64_FORMAT " Completed buffers");
+                }
+            });
+        }
+    };
 
     CameraAravisNodelet::~CameraAravisNodelet() {
         for (int i = 0; i < streams_.size(); i++) {
@@ -110,6 +216,9 @@ namespace camera_aravis {
     void CameraAravisNodelet::onInit() {
         ros::NodeHandle pnh = getPrivateNodeHandle();
 
+        diagnostics_handler =
+            std::make_shared<DiagnosticsHandler>(this, getMTNodeHandle(), getMTPrivateNodeHandle(), getName());
+
         // Retrieve ros parameters
         // Get the camera guid as a parameter or use the first device.
         guid_ = pnh.param<std::string>("guid", guid_);
@@ -117,6 +226,8 @@ namespace camera_aravis {
 
         double software_trigger_rate = pnh.param<double>("software_trigger_rate", 0);
         frame_id_ = get_tf_prefix(pnh) + pnh.param<std::string>("frame_id", frame_id_);
+
+        diagnostics_handler->get_updater().setHardwareID(getNodeHandle().getNamespace());
 
         std::string stream_channel_args;
         if (pnh.getParam("channel_names", stream_channel_args)) {
@@ -145,6 +256,7 @@ namespace camera_aravis {
         for (int i = 5; i > 0; --i) {
             if (n_devices == 0) {
                 ROS_ERROR("No cameras detected, retrying in 1s ...");
+                diagnostics_handler->get_updater().force_update();
                 ros::Duration(1.0).sleep();
                 n_devices = arv_get_n_devices();
             }
@@ -154,6 +266,8 @@ namespace camera_aravis {
             ROS_FATAL("No cameras detected, exiting.");
             shutdown();
         }
+
+        diagnostics_handler->setup_camera_seach(guid_);
 
         ROS_INFO("# Devices: %d", n_devices);
         for (uint i = 0; i < n_devices; i++) ROS_INFO("Device%d: %s", i, arv_get_device_id(i));
@@ -167,6 +281,7 @@ namespace camera_aravis {
                 ROS_INFO_STREAM("Opening: " << guid_);
                 camera = aravis::camera_new(guid_.c_str());
             }
+            diagnostics_handler->get_updater().force_update();
             ros::Duration(1.0).sleep();
         }
 
@@ -389,6 +504,7 @@ namespace camera_aravis {
                         if (data->can->use_ptp_stamp_) internal::resetPtpClock(data->can->device);
                     },
                 &(stream_ids_[i]));
+            diagnostics_handler->setup_stream(GPtr<ArvStream>(stream.arv_stream.get(), true));
         }
         g_signal_connect(device.get(), "control-lost", (GCallback) CameraAravisNodelet::controlLostCallback, this);
 

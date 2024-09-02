@@ -220,6 +220,10 @@ namespace camera_aravis {
         std::vector<StreamIdData> stream_ids_;
 
         std::vector<Stream> streams_;
+
+        struct DiagnosticsHandler;
+        std::shared_ptr<DiagnosticsHandler> diagnostics_handler;
+        friend DiagnosticsHandler;
     };
 
 }  // end namespace camera_aravis
