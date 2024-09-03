@@ -68,6 +68,12 @@ namespace camera_aravis {
 
             const char* get_vendor_name(const NonOwnedGPtr<ArvCamera>& cam);
 
+            const char* get_model_name(const NonOwnedGPtr<ArvCamera>& cam);
+
+            const char* get_serial_number(const NonOwnedGPtr<ArvCamera>& cam);
+
+            const char* get_user_id(const NonOwnedGPtr<ArvCamera>& cam);
+
             gint64 get_payload(const NonOwnedGPtr<ArvCamera>& cam);
 
             double get_frame_rate(const NonOwnedGPtr<ArvCamera>& cam);
