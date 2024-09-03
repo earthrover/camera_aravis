@@ -31,7 +31,7 @@ namespace camera_aravis {
         GPtr(GPtr<T>&& other) noexcept: ptr(std::exchange(other.ptr, nullptr)) {}
 
         GPtr<T>& operator=(const GPtr<T>& other) {
-            *this = GPtr<T>(other);
+            *this = GPtr<T>(other, true);
             return *this;
         }
 
